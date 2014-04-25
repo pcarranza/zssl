@@ -2,7 +2,7 @@ require "openssl"
 require "tempfile"
 require "securerandom"
 require "digest/md5"
-require_relative '../encrypt.rb'
+require_relative '../lib/encrypter.rb'
 
 describe CryptoHelper do
     it "raises ArgumentError without public key" do
@@ -22,12 +22,12 @@ describe CryptoHelper do
         it "contains the key" do
             crypto.key.should_not.nil?
         end
-        it "raises ArgumentError encrypting empty text" do
+        it "fails encrypting empty text" do
             expect do
                 crypto.encrypt_text ""
             end.to raise_error(ArgumentError)
         end
-        it "raises ArgumentError encrypting nil text" do
+        it "fails encrypting nil text" do
             expect do
                 crypto.encrypt_text nil 
             end.to raise_error(ArgumentError)
@@ -41,35 +41,45 @@ describe CryptoHelper do
                 crypto.encrypt_text "a" * 2048
             end.to raise_error(OpenSSL::PKey::RSAError)
         end
+        it "fails decryption if there is only public key" do
+            encrypter_only = CryptoHelper.new keypair.public_key
+            expect do
+            encrypter_only.decrypt_text "some text"
+            end.to raise_error(ArgumentError)
+        end
+        it "encrypts with the public and decrypts with the private" do
+            encrypter_only = CryptoHelper.new keypair.public_key
+            encrypted_text = encrypter_only.encrypt_text "some text"
+            encrypted_text.should_not eq "some text"
+            decrypted_text = crypto.decrypt_text encrypted_text
+            decrypted_text.should eq "some text"
+        end
 
         context "with a file bigger than the key" do
             bigfile = Tempfile.new('bigfile')
-            bigfile.write(SecureRandom.hex) until bigfile.length > 1024
+            bigfile.write(SecureRandom.hex) until bigfile.length > 1024 * 1024
             bigfile.close
             source = bigfile.path
             source_md5 = Digest::MD5.digest File.read(source)
 
             it "encrypts and then decrypts the file" do
                 source = bigfile.path
-                target = Dir::Tmpname::make_tmpname 'encrypted_big_file', nil
+                encrypted = Dir::Tmpname::make_tmpname 'encrypted_big_file', nil
                 decrypted = Dir::Tmpname::make_tmpname 'decrypted_big_file', nil
 
                 begin
-                    crypto.encrypt_file(source, target)
-                    encrypted_md5 = Digest::MD5.digest File.read(target)
+                    crypto.encrypt_file(source, encrypted)
+                    encrypted_md5 = Digest::MD5.digest File.read(encrypted)
                     source_md5.should_not eq encrypted_md5
 
-                    # crypto.decrypt_file(target, decrypted)
-                    # decrypted_md5 = Digest::MD5.digest File.read(decrypted)
-                    # decrypted_md5.should eq source_md5
+                    crypto.decrypt_file(encrypted, decrypted)
+                    decrypted_md5 = Digest::MD5.digest File.read(decrypted)
+                    decrypted_md5.should eq source_md5
                 ensure
-                    File.delete target
-                    # File.delete decrypted
+                    File.delete encrypted
+                    File.delete decrypted
                 end
             end
-
         end
-
-        keyfile.unlink
     end
 end

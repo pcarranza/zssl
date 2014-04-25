@@ -1,22 +1,32 @@
 require "openssl"
 require "base64"
 
-MEGABYTE=1024*1024
-
 class CryptoHelper
 
     attr_reader :key
-    attr_writer :chunk_size
 
-    def initialize(keyfile)
-        raise ArgumentError, "Key cannot be nil" if keyfile.nil?
-        @rsakey = OpenSSL::PKey::RSA::new File.new(keyfile)
+    def initialize(key)
+        raise ArgumentError, "Key cannot be nil" if key.nil?
+        case key
+        when OpenSSL::PKey::PKey
+            @pkey = key
+        else
+            @pkey = OpenSSL::PKey.read File.new(key)
+        end
         @chunk_size = 1024
+        @division_line = '-' * 60
     end
 
     def encrypt_text(text)
         raise ArgumentError, "Invalid text" if text.nil? or text.empty?
-        @rsakey.public_encrypt text
+        raise ArgumentError, "Invalid key for encryption" unless @pkey.public?
+        @pkey.public_encrypt text
+    end
+
+    def decrypt_text(text)
+        raise ArgumentError, "Invalid text" if text.nil? or text.empty?
+        raise ArgumentError, "Invalid key for decryption" unless @pkey.private?
+        @pkey.private_decrypt text
     end
 
     def encrypt_file(source, target)
@@ -30,8 +40,12 @@ class CryptoHelper
         cipher.key = key
         cipher.iv = iv
 
-        target.write Base64.encode64(@rsakey.public_encrypt(key))
-        target.write Base64.encode64(@rsakey.public_encrypt(iv))
+        encrypt_encode = Proc.new do |v|
+            target.write Base64.encode64(@pkey.public_encrypt(v))
+            target.write @division_line + "\n"
+        end
+        encrypt_encode.call key
+        encrypt_encode.call iv
 
         begin
             encrypted = "" 
@@ -53,16 +67,28 @@ class CryptoHelper
     def decrypt_file(source, target)
         source = open_file source, 'r'
         target = open_file target, 'w'
-        @shared_key = OpenSSL::Cipher::AES256.new 'CBC'
-        @shared_key.decrypt
-        @shared_key.key = @key
-        @shared_key.iv = @iv
+
+        decode_decrypt = Proc.new do
+            buffer = ""
+            begin
+                line = source.readline.chomp
+                if line == @division_line
+                    break
+                end
+                buffer += line
+            end until source.eof?
+            @pkey.private_decrypt Base64.decode64(buffer)
+        end
+
+        cipher = OpenSSL::Cipher::AES256.new 'CBC'
+        cipher.decrypt
+        cipher.key = decode_decrypt.call
+        cipher.iv = decode_decrypt.call 
         begin
             begin
-                chunk = source.read @chunk_size
-                target.write @shared_key.update(chunk)
+                chunk = Base64.decode64(source.readline)
+                target.write cipher.update(chunk)
             end until source.eof?
-            target.write @shared_key.final
         ensure
             target.close
             source.close
