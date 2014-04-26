@@ -35,7 +35,7 @@ class CryptoHelper
 
         cipher = OpenSSL::Cipher::AES256.new 'CBC'
         cipher.encrypt
-        key = cipher.random_key
+        key = cipher.random_key # TODO create a key with a user defined salt and
         iv = cipher.random_iv
         cipher.key = key
         cipher.iv = iv
@@ -89,6 +89,7 @@ class CryptoHelper
                 chunk = Base64.decode64(source.readline)
                 target.write cipher.update(chunk)
             end until source.eof?
+            target.write cipher.final
         ensure
             target.close
             source.close
@@ -100,10 +101,45 @@ def open_file file, mode
     case file
     when String 
         File.open file, mode
-    when File
+    when File, IO
         file
     else
-        raise ArgumentError, 'Invalid file'
+        raise ArgumentError, "Invalid file #{file}"
     end
 end
 
+class CryptoOptions
+
+    attr_reader :source, :target, :key
+
+    def initialize options, args
+        raise ArgumentError, "Invalid options" if options.nil?
+        raise ArgumentError, "Invalid arguments" if args.nil?
+        @mode, @source, @target = *args
+        raise ArgumentError, "mode is mandatory" if @mode.nil?
+        raise ArgumentError, "invalid mode '#{@mode}'" unless ['e', 'd', 'encrypt', 'decrypt'].include? @mode
+        raise ArgumentError, "source is mandatory" if @source.nil?
+        if @source == "-"
+            @source = STDIN  
+        else
+            @source = open_file @source, 'r'
+        end
+        if @target.nil?
+            @target = STDOUT
+        else
+            @target = open_file @target, 'w'
+        end
+        if options.has_key? 'k'
+            @key = open_file options['k'], 'r'
+        else
+            Dir.glob(File.expand_path('~/.ssh/id_?sa')) do |f|
+                next unless @key.nil?
+                @key = open_file f, 'r'
+            end
+        end
+    end
+
+    def encrypt?
+        ["e", "encrypt"].include? @mode
+    end
+end

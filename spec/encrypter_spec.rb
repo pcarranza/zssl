@@ -57,7 +57,7 @@ describe CryptoHelper do
 
         context "with a file bigger than the key" do
             bigfile = Tempfile.new('bigfile')
-            bigfile.write(SecureRandom.hex) until bigfile.length > 1024 * 1024
+            bigfile.write(SecureRandom.hex) until bigfile.length > 1024 * 16
             bigfile.close
             source = bigfile.path
             source_md5 = Digest::MD5.digest File.read(source)
@@ -81,5 +81,61 @@ describe CryptoHelper do
                 end
             end
         end
+    end
+end
+
+describe CryptoOptions do
+    it "fails if no mode is passed" do
+        expect do
+            CryptoOptions.new({"v"=>nil}, [])
+        end.to raise_error "mode is mandatory"
+    end
+    it "fails if an invalid mode is passed" do
+        expect do
+            CryptoOptions.new({"v"=>nil}, ["invalid"])
+        end.to raise_error "invalid mode 'invalid'"
+    end
+    it "fails if no source is passed" do
+        expect do
+            CryptoOptions.new({"v"=>nil}, ["e"])
+        end.to raise_error "source is mandatory"
+    end
+    it "uses stdin and stdout if source is -" do
+        options = CryptoOptions.new({}, ['e', '-'])
+        options.source.should eq STDIN
+        options.target.should eq STDOUT
+    end
+    it "uses file if source is the file" do
+        source = Tempfile.new('source')
+        options = CryptoOptions.new({}, ['e', source.path])
+        options.source.path.should eq source.path
+        options.target.should eq STDOUT
+    end
+    it "uses file if target is a file" do
+        target = Tempfile.new('target')
+        options = CryptoOptions.new({}, ['e', '-', target.path])
+        options.source.should eq STDIN
+        options.target.path.should eq target.path
+    end
+    it "is in encrypt mode if mode is 'e' or 'encrypt'" do
+        options = CryptoOptions.new({}, ['e', '-'])
+        options.encrypt?.should be true
+        options = CryptoOptions.new({}, ['encrypt', '-'])
+        options.encrypt?.should be true
+    end
+    it "is in decrypt mode if mode is 'd' or 'decrypt'" do
+        options = CryptoOptions.new({}, ['d', '-'])
+        options.encrypt?.should be false
+        options = CryptoOptions.new({}, ['decrypt', '-'])
+        options.encrypt?.should be false
+    end
+    it "picks the user ssh key when no key is provided" do
+        options = CryptoOptions.new({}, ['d', '-'])
+        options.key.should_not.nil?
+    end
+    it "picks the provided ssh key" do
+        target = Tempfile.new('key')
+        options = CryptoOptions.new({:key => target.path}, ['d', '-'])
+        options.key.should_not.nil?
     end
 end

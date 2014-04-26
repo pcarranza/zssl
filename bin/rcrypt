@@ -1,0 +1,36 @@
+#!/usr/bin/env ruby
+
+require "optparse"
+require_relative "../lib/encrypter.rb"
+
+options = {}
+parser = OptionParser.new do |opts|
+    opts.banner = "usage: #{$PROGRAM_NAME} [options] MODE SOURCE [TARGET]"
+    opts.separator ""
+    opts.separator "MODE: e[ncrypt], using a public key or d[ecrypt] using a private key"
+    opts.separator ""
+    opts.on "-v", "--verbose", "Output more information to stderr" do |v|
+        options[:verbose] = v
+    end
+    opts.on "-k", "--key [FILE]", "Keyfile to encrypt or decrypt, DER or PEM encoded, by default it is your ssh key (~/.ssh/id_rsa)" do |v|
+        options[:key] = v
+    end
+    opts.separator ""
+end
+begin
+    parser.parse!
+    options = CryptoOptions.new options, ARGV
+    
+rescue
+    puts "#{$!}"
+    puts ""
+    puts parser.help
+    exit 1
+end
+
+crypto = CryptoHelper.new options.key
+if options.encrypt?
+    crypto.encrypt_file options.source, options.target
+else
+    crypto.decrypt_file options.source, options.target
+end
