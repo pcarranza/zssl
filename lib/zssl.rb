@@ -1,22 +1,35 @@
 require "openssl"
 require "base64"
+require "securerandom"
 
 module Zoocial
     class Cipher
 
-        attr_reader :key, :noise_size
+        attr_reader :pkey, :noise_size
 
         def initialize(key)
             raise ArgumentError, "Key cannot be nil" if key.nil?
             case key
             when OpenSSL::PKey::PKey
                 @pkey = key
+            when String, File, IO
+                text = Zoocial.read_file key
+                if text =~ /^ssh-rsa/
+                    @pkey = Zoocial.load_ssh_pubkey text
+                else
+                    @pkey = OpenSSL::PKey.read text
+                end
+            end
+            case @pkey
+            when OpenSSL::PKey::RSA
+                @noise_size = @pkey.n.num_bytes >> 1 | @pkey.n.num_bytes >> 2
+            when OpenSSL::PKey::DSA
+                raise ArgumentError, 'DSA is not supported'
             else
-                @pkey = OpenSSL::PKey.read File.new(key)
+                raise ArgumentError, "Unsupported key #{key}"
             end
             @chunk_size = 1024
             @division_line = '-' * 60
-            @noise_size = @pkey.n.num_bytes >> 1 | @pkey.n.num_bytes >> 2
         end
 
         def encrypt(source, target)
@@ -31,10 +44,10 @@ module Zoocial
             cipher.iv = iv
             hidden_key = hide_shared_key_in_buffer key, iv
 
-            target.write Base64.encode64(@pkey.public_encrypt(hidden_key))
-            target.write @division_line + "\n"
-
             begin
+                target.write Base64.encode64(@pkey.public_encrypt(hidden_key))
+                target.write @division_line + "\n"
+
                 encrypted = "" 
                 begin
                     chunk = source.read(@chunk_size)
@@ -57,20 +70,21 @@ module Zoocial
 
             buffer = ""
             begin
-                line = source.readline.chomp
-                if line == @division_line
-                    break
-                end
-                buffer += line
-            end until source.eof?
-            buffer = @pkey.private_decrypt Base64.decode64(buffer)
-            key, iv = read_shared_key_from_buffer buffer
+                begin
+                    line = source.readline.chomp
+                    if line == @division_line
+                        break
+                    end
+                    buffer += line
+                end until source.eof?
 
-            cipher = OpenSSL::Cipher::AES256.new 'CBC'
-            cipher.decrypt
-            cipher.key = key
-            cipher.iv = iv
-            begin
+                buffer = @pkey.private_decrypt Base64.decode64(buffer)
+                key, iv = read_shared_key_from_buffer buffer
+
+                cipher = OpenSSL::Cipher::AES256.new 'CBC'
+                cipher.decrypt
+                cipher.key = key
+                cipher.iv = iv
                 begin
                     chunk = Base64.decode64(source.readline)
                     target.write cipher.update(chunk)
@@ -86,7 +100,7 @@ module Zoocial
 
         def hide_shared_key_in_buffer key, iv
             seed = [(SecureRandom.random_number * 1_000_000_000_000)].pack("I")
-            pos_in_buffer = seed.unpack("I").pop.modulo(@noise_size - (32 + 16 + 4))
+            pos_in_buffer = seed.unpack("I").pop.modulo(@noise_size - 52)
             random_buffer = ""
             begin 
                 random_buffer += SecureRandom.random_bytes 
@@ -97,11 +111,41 @@ module Zoocial
         end
 
         def read_shared_key_from_buffer buffer
-            pos_in_buffer = buffer.byteslice(0..4).unpack("I").pop.modulo(@noise_size - (32 + 16 + 4)) + 4
+            pos_in_buffer = buffer.byteslice(0..4).unpack("I").pop.modulo(@noise_size - 52) + 4
             return buffer.byteslice(pos_in_buffer, 32), \
                 buffer.byteslice(pos_in_buffer + 32, 16)
         end
 
+    end
+
+    private
+
+    def self.load_ssh_pubkey text
+        rsakey = OpenSSL::PKey::RSA.new
+        text.lines.each do |line|
+            base64 = line.chomp.split[1]
+            keydata = base64.unpack("m").first
+            parts = Array.new
+            while (keydata.length > 0)
+                dlen = keydata[0, 4].bytes.inject(0) do |a, b|
+                    (a << 8) + b
+                end
+                data = keydata[4, dlen]
+                keydata = keydata[(dlen + 4)..-1]
+                parts.push(data)
+            end
+            type = parts[0]
+            raise ArgumentError, "Unsupported key type #{type}" unless type == "ssh-rsa"
+            e = parts[1].bytes.inject do |a, b|
+                (a << 8) + b
+            end
+            n = parts[2].bytes.inject do |a, b|
+                (a << 8) + b
+            end
+            rsakey.n = n
+            rsakey.e = e
+        end
+        rsakey
     end
 
     def self.open_file file, mode
@@ -115,47 +159,8 @@ module Zoocial
         end
     end
 
-    class CipherOptions
-
-        attr_reader :source, :target, :key
-
-        def initialize options, args
-            raise ArgumentError, "Invalid options" if options.nil?
-            raise ArgumentError, "Invalid arguments" if args.nil?
-            @mode, @source, @target = *args
-            @verbose = options.has_key? 'v'
-            raise ArgumentError, "mode is mandatory" if @mode.nil?
-            raise ArgumentError, "invalid mode '#{@mode}'" unless ['e', 'd', 'encrypt', 'decrypt'].include? @mode
-            raise ArgumentError, "source is mandatory" if @source.nil?
-            if @source == "-"
-                @source = STDIN  
-                STDERR.write "reading from SDTIN" if @verbose
-            else
-                @source = Zoocial.open_file @source, 'r'
-                STDERR.write "reading file #{@source.path}" if @verbose
-            end
-            if @target.nil?
-                @target = STDOUT
-                STDERR.write "writing to sdtout" if @verbose
-            else
-                @target = Zoocial.open_file @target, 'w'
-                STDERR.write "writing to #{@target.path}" if @verbose
-            end
-            if options.has_key? 'i'
-                @key = Zoocial.open_file options['i'], 'r'
-            else
-                Dir.glob(File.expand_path('~/.ssh/id_?sa')) do |f|
-                    next unless @key.nil?
-                    @key = Zoocial.open_file f, 'r'
-                end
-            end
-            STDERR.write "using key #{@key.path}" if @verbose
-            STDERR.write "encrypting" if @verbose and encrypt?
-            STDERR.write "decrypting" if @verbose and not encrypt?
-        end
-
-        def encrypt?
-            ["e", "encrypt"].include? @mode
-        end
+    def self.read_file file
+        f = Zoocial.open_file file, 'r'
+        f.read
     end
 end

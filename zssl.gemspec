@@ -11,7 +11,7 @@ Gem::Specification.new do |s|
     eos
     s.author = "Pablo Carranza"
     s.email = "pcarranza@gmail.com"
-    s.files = ["lib/zssl.rb"]
+    s.files = ["lib/zssl.rb", 'lib/zssl_options.rb']
     s.executables << "zssl"
 end
 

@@ -1,110 +1,124 @@
-require "openssl"
-require "tempfile"
-require "securerandom"
-require "digest/md5"
+require 'spec_helper'
 require 'zssl'
+require "tempfile"
+require "digest/md5"
 
 describe Zoocial::Cipher do
-    it "raises ArgumentError without public key" do
+
+    it "errs without public key" do
         expect do 
             Zoocial::Cipher.new nil 
-        end.to raise_error(ArgumentError)
+        end.to raise_error 'Key cannot be nil'
     end
 
-    context "with a keypair" do
-        key_size = 4096
-        keypair = OpenSSL::PKey::RSA::new key_size
-        keyfile = Tempfile.new('keypair')
-        keyfile.write(keypair.to_pem)
-        keyfile.write(keypair.public_key.to_pem)
-        keyfile.close
-        crypto = Zoocial::Cipher.new keyfile.path
+    it "errs if key is not valid" do
+        expect do
+            Zoocial::Cipher.new 123
+        end.to raise_error 'Unsupported key 123'
+    end
 
-        it "contains the key" do
-            crypto.key.should_not.nil?
+    key_size = 1024
+
+    context "with a source file" do
+        delete = Proc.new do |file|
+            case file
+            when String
+                filename = file
+            when File, IO
+                filename = file.path
+            end
+            File.delete filename if File.exist? filename
+        end
+        
+        bigfile = Tempfile.new('bigfile')
+        bigfile.write(SecureRandom.hex) until bigfile.length > key_size * 16
+        bigfile.close
+        source = bigfile.path
+        source_md5 = Digest::MD5.digest File.read(source)
+
+        context "with a DSA keypair" do
+            keypair = OpenSSL::PKey::DSA::new 1024
+
+            it "fails to build" do
+                expect do 
+                    Zoocial::Cipher.new keypair
+                end.to raise_error 'DSA is not supported'
+            end
         end
 
-        context "with a source file" do
-            bigfile = Tempfile.new('bigfile')
-            bigfile.write(SecureRandom.hex) until bigfile.length > key_size * 16
-            bigfile.close
-            source = bigfile.path
-            source_md5 = Digest::MD5.digest File.read(source)
+        context "with an ssh public and private key file" do
+            pubkeyfile = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
+            privkeyfile = File.join(File.dirname(__FILE__), 'id_rsa_test')
 
-            it "encrypts and then decrypts the file" do
+            it "reads the key if it is an already open file" do
+                File.open pubkeyfile, 'r' do |f|
+                    crypto = Zoocial::Cipher.new f
+                    crypto.pkey.should_not.nil?
+                end
+            end
+
+            it "contains a valid key" do
+                crypto = Zoocial::Cipher.new pubkeyfile
+                crypto.pkey.should_not.nil?
+            end
+
+            it "encrypts and then decrypts a file correctly" do
+                encrypter = Zoocial::Cipher.new pubkeyfile
+                decrypter = Zoocial::Cipher.new privkeyfile
                 source = bigfile.path
                 encrypted = Dir::Tmpname::make_tmpname 'encrypted_big_file', nil
                 decrypted = Dir::Tmpname::make_tmpname 'decrypted_big_file', nil
 
                 begin
-                    crypto.encrypt(source, encrypted)
+                    encrypter.send :encrypt, source, encrypted
                     encrypted_md5 = Digest::MD5.digest File.read(encrypted)
                     source_md5.should_not eq encrypted_md5
 
-                    crypto.decrypt(encrypted, decrypted)
+                    decrypter.decrypt(encrypted, decrypted)
                     decrypted_md5 = Digest::MD5.digest File.read(decrypted)
                     decrypted_md5.should eq source_md5
                 ensure
-                    File.delete encrypted
-                    File.delete decrypted
+                    delete.call encrypted
+                    delete.call decrypted
+                end
+
+            end
+        end
+
+        context "with a generated RSA keypair" do
+            keypair = OpenSSL::PKey::RSA::new key_size
+
+            it "contains the key" do
+                crypto = Zoocial::Cipher.new keypair
+                crypto.pkey.should eq keypair
+            end
+
+            context "written to a temporary file" do
+                keyfile = Tempfile.new('keypair')
+                keyfile.write(keypair.to_pem)
+                keyfile.write(keypair.public_key.to_pem)
+                keyfile.close
+                crypto = Zoocial::Cipher.new keyfile.path
+
+                it "encrypts and then decrypts a file correctly" do
+                    source = bigfile.path
+                    encrypted = Dir::Tmpname::make_tmpname 'encrypted_big_file', nil
+                    decrypted = File.open(Dir::Tmpname::make_tmpname('decrypted_big_file', nil), 'w')
+
+                    begin
+                        crypto.send :encrypt, source, encrypted
+                        encrypted_md5 = Digest::MD5.digest File.read(encrypted)
+                        source_md5.should_not eq encrypted_md5
+
+                        crypto.decrypt(encrypted, decrypted)
+                        decrypted_md5 = Digest::MD5.digest File.read(decrypted)
+                        decrypted_md5.should eq source_md5
+                    ensure
+                        delete.call encrypted
+                        delete.call decrypted
+                    end
                 end
             end
         end
-    end
-end
-
-describe Zoocial::CipherOptions do
-    it "fails if no mode is passed" do
-        expect do
-            Zoocial::CipherOptions.new({"v"=>nil}, [])
-        end.to raise_error "mode is mandatory"
-    end
-    it "fails if an invalid mode is passed" do
-        expect do
-            Zoocial::CipherOptions.new({"v"=>nil}, ["invalid"])
-        end.to raise_error "invalid mode 'invalid'"
-    end
-    it "fails if no source is passed" do
-        expect do
-            Zoocial::CipherOptions.new({"v"=>nil}, ["e"])
-        end.to raise_error "source is mandatory"
-    end
-    it "uses stdin and stdout if source is -" do
-        options = Zoocial::CipherOptions.new({}, ['e', '-'])
-        options.source.should eq STDIN
-        options.target.should eq STDOUT
-    end
-    it "uses file if source is the file" do
-        source = Tempfile.new('source')
-        options = Zoocial::CipherOptions.new({}, ['e', source.path])
-        options.source.path.should eq source.path
-        options.target.should eq STDOUT
-    end
-    it "uses file if target is a file" do
-        target = Tempfile.new('target')
-        options = Zoocial::CipherOptions.new({}, ['e', '-', target.path])
-        options.source.should eq STDIN
-        options.target.path.should eq target.path
-    end
-    it "is in encrypt mode if mode is 'e' or 'encrypt'" do
-        options = Zoocial::CipherOptions.new({}, ['e', '-'])
-        options.encrypt?.should be true
-        options = Zoocial::CipherOptions.new({}, ['encrypt', '-'])
-        options.encrypt?.should be true
-    end
-    it "is in decrypt mode if mode is 'd' or 'decrypt'" do
-        options = Zoocial::CipherOptions.new({}, ['d', '-'])
-        options.encrypt?.should be false
-        options = Zoocial::CipherOptions.new({}, ['decrypt', '-'])
-        options.encrypt?.should be false
-    end
-    it "picks the user ssh key when no key is provided" do
-        options = Zoocial::CipherOptions.new({}, ['d', '-'])
-        options.key.should_not.nil?
-    end
-    it "picks the provided ssh key" do
-        target = Tempfile.new('key')
-        options = Zoocial::CipherOptions.new({:key => target.path}, ['d', '-'])
-        options.key.should_not.nil?
     end
 end

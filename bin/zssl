@@ -1,36 +1,13 @@
 #!/usr/bin/env ruby
 
-require "optparse"
 require "zssl"
+require "zssl_options"
 
-options = {}
-parser = OptionParser.new do |opts|
-    opts.banner = "usage: zssl [options] MODE SOURCE [TARGET]"
-    opts.separator ""
-    opts.separator "MODE: e[ncrypt], using a public key or d[ecrypt] using a private key"
-    opts.separator ""
-    opts.on "-v", "--verbose", "Output more information to stderr" do |v|
-        options[:verbose] = v
-    end
-    opts.on "-i", "--identity [FILE]", "Key identity file to encrypt or decrypt, DER or PEM encoded, by default it is your ssh key (~/.ssh/id_rsa)" do |v|
-        options[:key] = v
-    end
-    opts.separator ""
-end
+opts = Zoocial::Options::new
+opts.parse!
+
 begin
-    parser.parse!
-    options = Zoocial::CipherOptions.new options, ARGV
-    
-rescue
-    puts "#{$!}"
-    puts ""
-    puts parser.help
-    exit 1
-end
-
-crypto = Zoocial::Cipher.new options.key
-if options.encrypt?
-    crypto.encrypt options.source, options.target
-else
-    crypto.decrypt options.source, options.target
+    crypto = Zoocial::Cipher.new opts.key
+    crypto.send opts.mode, opts.source, opts.target
+rescue Errno::EPIPE
 end
