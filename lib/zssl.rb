@@ -58,6 +58,8 @@ module Zoocial
                     end 
                 end until source.eof?
                 target.write Base64.encode64 encrypted
+            rescue Interrupt
+                puts "Operation canceled by the user"
             ensure
                 target.close unless target.tty?
                 source.close unless source.tty?
@@ -90,6 +92,8 @@ module Zoocial
                     target.write cipher.update(chunk)
                 end until source.eof?
                 target.write cipher.final
+            rescue Interrupt
+                puts "Operation canceled by the user"
             ensure
                 target.close unless target.tty?
                 source.close unless source.tty?
