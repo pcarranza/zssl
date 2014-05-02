@@ -41,11 +41,11 @@ module Zoocial
             begin
                 parse
                 @mode, @source, @target = arguments
-                raise ArgumentError, "Invalid mode '#{@mode}'" if @mode.nil?
+                raise ArgumentError, "Mode is mandatory" if @mode.nil? or @mode.empty?
                 if ['e', 'encrypt'].include? @mode.downcase
-                    @mode = :encrypt 
+                    @mode = :encrypt
                 elsif ['d', 'decrypt'].include? @mode.downcase
-                    @mode = :decrypt  
+                    @mode = :decrypt
                 else
                     raise ArgumentError, "Invalid mode '#{@mode}'"
                 end

@@ -14,27 +14,20 @@ describe Options do
     end
 
     context "parsing the input" do
-        $local_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
         class Zoocial::Options
             def parse
-            end
-            def print_error e
-                false
-            end
-            def local_ssh_pub_key
-                $local_rsa
             end
         end
 
         it "fails if no mode is passed" do
             opts = Options.new
             opts.stub(:arguments).and_return(nil)
-            expect do opts.parse! end.to raise_error
+            expect do opts.parse! end.to raise_error SystemExit
         end
         it "fails if invalid mode is passed" do
             opts = Options.new
             opts.stub(:arguments).and_return('invalid')
-            expect do opts.parse! end.to raise_error
+            expect do opts.parse! end.to raise_error SystemExit
         end
         it "encryption mode if e passed" do
             opts = Options.new
@@ -48,11 +41,19 @@ describe Options do
             opts.parse!
             opts.mode.should eq :decrypt
         end
-        it "points to ssh private key if no key is provided" do
+        it "points to ssh key if no key is provided" do
+            local_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
             opts = Options.new
             opts.stub(:arguments).and_return('d')
+            opts.stub(:local_ssh_pub_key).and_return local_rsa
             opts.parse!
-            opts.key.path.should eq $local_rsa
+            opts.key.path.should eq local_rsa
+        end
+        it "fails if no key provided nor ssh key is available" do
+            opts = Options.new
+            opts.stub(:arguments).and_return('e')
+            opts.stub(:local_ssh_pub_key).and_return ''
+            expect do opts.parse! end.to raise_error SystemExit
         end
         it "points to the provided key" do
             key = Tempfile.new('key')
