@@ -14,7 +14,7 @@ describe Options do
     end
 
     context "parsing the input" do
-        $local_rsa = Tempfile.new('id_rsa').path
+        $local_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
         class Zoocial::Options
             def parse
             end
