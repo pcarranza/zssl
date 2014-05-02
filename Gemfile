@@ -1,3 +1,6 @@
-source 'https://rubygems.org'
-gem 'rspec', :require => 'spec'
-gem 'simplecov', :require => false
+source "https://rubygems.org"
+
+group :development do
+    gem "rspec"
+    gem "simplecov"
+end
