@@ -17,7 +17,7 @@ describe Options do
         class Zoocial::Options
             def parse
             end
-            def print_error
+            def print_error e
                 false
             end
         end
