@@ -30,7 +30,7 @@ module Zoocial
             @parser.parse!
         end
 
-        def print_error
+        def print_error e
             puts "#{$!}"
             puts ""
             puts @parser.help
@@ -65,8 +65,8 @@ module Zoocial
                 @source = open_file.call @source, 'r', $stdin
                 @target = open_file.call @target, 'w', $stdout
                 @key = open_file.call @options[:key], 'r'
-                rescue e
-                    raise e unless print_error
+                rescue => e
+                    raise e unless print_error e
                 end
             end
         end
