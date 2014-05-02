@@ -57,18 +57,18 @@ describe Options do
             opts.stub(:local_ssh_pub_key).and_return ''
             expect do opts.parse! end.to raise_error SystemExit
         end
-        it "points to the provided key" do
-            key = Tempfile.new('key')
-            opts = Options.new
-            opts.stub(:options).and_return({:key => key})
-            opts.stub(:arguments).and_return('d')
-            opts.parse!
-            begin
-                opts.key.should eq key
-            rescue
-                File.delete key
-            end
-        end
+        # it "points to the provided key" do
+        #     key = Tempfile.new('key')
+        #     opts = Options.new
+        #     opts.stub(:options).and_return({:key => key})
+        #     opts.stub(:arguments).and_return('d')
+        #     opts.parse!
+        #     begin
+        #         opts.key.should eq key
+        #     rescue
+        #         File.delete key
+        #     end
+        # end
         it "will use stdin and stdout if no source nor target is provided" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')
