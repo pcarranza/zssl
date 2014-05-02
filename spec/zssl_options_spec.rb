@@ -18,6 +18,7 @@ describe Options do
             def parse
             end
             def print_error
+                false
             end
         end
 
