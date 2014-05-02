@@ -14,6 +14,7 @@ describe Options do
     end
 
     context "parsing the input" do
+        local_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
         class Zoocial::Options
             def parse
             end
@@ -32,17 +33,18 @@ describe Options do
         it "encryption mode if e passed" do
             opts = Options.new
             opts.stub(:arguments).and_return('e')
+            opts.stub(:local_ssh_pub_key).and_return local_rsa
             opts.parse!
             opts.mode.should eq :encrypt
         end
         it "decryption mode if d passed" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')
+            opts.stub(:local_ssh_pub_key).and_return local_rsa
             opts.parse!
             opts.mode.should eq :decrypt
         end
         it "points to ssh key if no key is provided" do
-            local_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
             opts = Options.new
             opts.stub(:arguments).and_return('d')
             opts.stub(:local_ssh_pub_key).and_return local_rsa
@@ -69,6 +71,7 @@ describe Options do
         it "will use stdin and stdout if no source nor target is provided" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')
+            opts.stub(:local_ssh_pub_key).and_return local_rsa
             opts.parse!
             opts.source.should eq $stdin
             opts.target.should eq $stdout
@@ -78,6 +81,7 @@ describe Options do
             target = Tempfile.new('target')
             opts = Options.new
             opts.stub(:arguments).and_return('d')
+            opts.stub(:local_ssh_pub_key).and_return local_rsa
             opts.parse!
             begin
                 opts.source.should eq source
