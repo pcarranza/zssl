@@ -59,7 +59,7 @@ module Zoocial
                     end
                 end
 
-                @options[:key] = File.expand_path('~/.ssh/id_rsa') unless @options.has_key? :key
+                @options[:key] = local_ssh_pub_key unless @options.has_key? :key
                 raise ArgumentError, "No RSA key provided" unless @options.has_key? :key
 
                 @source = open_file.call @source, 'r', $stdin
@@ -68,6 +68,12 @@ module Zoocial
                 rescue => e
                     raise e unless print_error e
                 end
+            end
+
+            private
+
+            def local_ssh_pub_key
+                File.expand_path('~/.ssh/id_rsa')
             end
         end
     end

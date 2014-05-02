@@ -14,11 +14,15 @@ describe Options do
     end
 
     context "parsing the input" do
+        $local_rsa = Tempfile.new('id_rsa').path
         class Zoocial::Options
             def parse
             end
             def print_error e
                 false
+            end
+            def local_ssh_pub_key
+                $local_rsa
             end
         end
 
@@ -44,13 +48,12 @@ describe Options do
             opts.parse!
             opts.mode.should eq :decrypt
         end
-        # This tests depends on your environment
-        # it "points to ssh private key if no key is provided" do
-        #     opts = Options.new
-        #     opts.stub(:arguments).and_return('d')
-        #     opts.parse!
-        #     opts.key.path.should eq File.expand_path('~/.ssh/id_rsa')
-        # end
+        it "points to ssh private key if no key is provided" do
+            opts = Options.new
+            opts.stub(:arguments).and_return('d')
+            opts.parse!
+            opts.key.path.should eq $local_rsa
+        end
         it "points to the provided key" do
             key = Tempfile.new('key')
             opts = Options.new
