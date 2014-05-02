@@ -1,7 +1,7 @@
 # ZSSL
 
 ### Status
-[![Build Status](https://travis-ci.org/pcarranza/zssl.png)](https://travis-ci.org/pcarranza)
+[![Build Status](https://travis-ci.org/pcarranza/zssl.png)](https://travis-ci.org/pcarranza/zssl)
 [![Coverage Status](https://coveralls.io/repos/pcarranza/zssl/badge.png)](https://coveralls.io/r/pcarranza/zssl)
 
 ## SSL like encryption for secure file sharing
