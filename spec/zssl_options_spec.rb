@@ -60,6 +60,7 @@ describe Options do
         it "points to the provided key" do
             key = Tempfile.new('key')
             opts = Options.new
+            opts.stub(:options).and_return({:key => key})
             opts.stub(:arguments).and_return('d')
             opts.parse!
             begin
