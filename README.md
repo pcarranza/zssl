@@ -1,5 +1,8 @@
 # ZSSL
 
+### Status
+[![Build Status](https://travis-ci.org/pcarranza/zssl.png)](https://travis-ci.org/pcarranza)
+
 ## SSL like encryption for secure file sharing
 
 ### Excerpt
