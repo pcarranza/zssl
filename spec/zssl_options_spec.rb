@@ -23,11 +23,13 @@ describe Options do
         it "fails if no mode is passed" do
             opts = Options.new
             opts.stub(:arguments).and_return(nil)
+            opts.stub(:puts)
             expect do opts.parse! end.to raise_error SystemExit
         end
         it "fails if invalid mode is passed" do
             opts = Options.new
             opts.stub(:arguments).and_return('invalid')
+            opts.stub(:puts)
             expect do opts.parse! end.to raise_error SystemExit
         end
         it "encryption mode if e passed" do
@@ -55,20 +57,18 @@ describe Options do
             opts = Options.new
             opts.stub(:arguments).and_return('e')
             opts.stub(:local_ssh_pub_key).and_return ''
+            opts.stub(:puts)
             expect do opts.parse! end.to raise_error SystemExit
         end
-        # it "points to the provided key" do
-        #     key = Tempfile.new('key')
-        #     opts = Options.new
-        #     opts.stub(:options).and_return({:key => key})
-        #     opts.stub(:arguments).and_return('d')
-        #     opts.parse!
-        #     begin
-        #         opts.key.should eq key
-        #     rescue
-        #         File.delete key
-        #     end
-        # end
+        it "points to the provided key" do
+            private_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test')
+            options = {:key => private_rsa}
+            opts = Options.new
+            opts.stub(:options).and_return(options)
+            opts.stub(:arguments).and_return('d')
+            opts.parse!
+            opts.key.path.should eq private_rsa
+        end
         it "will use stdin and stdout if no source nor target is provided" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')

@@ -26,6 +26,10 @@ module Zoocial
             return *ARGV
         end
 
+        def options
+            return @options
+        end
+
         def parse
             @parser.parse!
         end
@@ -59,12 +63,12 @@ module Zoocial
                     end
                 end
 
-                @options[:key] = local_ssh_pub_key unless @options.has_key? :key and File.exists? local_ssh_pub_key
-                raise ArgumentError, "No RSA key provided" unless @options.has_key? :key
+                options[:key] = local_ssh_pub_key unless options.has_key? :key and File.exists? local_ssh_pub_key
+                raise ArgumentError, "No RSA key provided" unless options.has_key? :key
 
                 @source = open_file.call @source, 'r', $stdin
                 @target = open_file.call @target, 'w', $stdout
-                @key = open_file.call @options[:key], 'r'
+                @key = open_file.call options[:key], 'r'
                 rescue => e
                     raise e unless print_error e
                 end
