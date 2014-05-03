@@ -54,30 +54,33 @@ module Zoocial
                     raise ArgumentError, "Invalid mode '#{@mode}'"
                 end
 
-                open_file = Proc.new do |filename, mode, default|
-                    if filename.nil?
-                        default
-                    else
-                        raise ArgumentError, "File #{filename} could not be found" unless File.exists? filename or mode == 'w'
-                        File.open filename, mode
-                    end
+                if options[:key].nil?
+                    options[:key] = local_ssh_pub_key 
                 end
+                    
+                raise ArgumentError, "Could not find valid RSA key" unless options.has_key? :key
 
-                options[:key] = local_ssh_pub_key unless options.has_key? :key and File.exists? local_ssh_pub_key
-                raise ArgumentError, "No RSA key provided" unless options.has_key? :key
-
-                @source = open_file.call @source, 'r', $stdin
-                @target = open_file.call @target, 'w', $stdout
-                @key = open_file.call options[:key], 'r'
-                rescue => e
-                    raise e unless print_error e
-                end
+                @source = open_file @source, 'r', $stdin
+                @target = open_file @target, 'w', $stdout
+                @key = open_file options[:key], 'r'
+            rescue => e
+                raise e unless print_error e
             end
+        end
 
-            private
+        def local_ssh_pub_key
+            File.expand_path('~/.ssh/id_rsa')
+        end
 
-            def local_ssh_pub_key
-                File.expand_path('~/.ssh/id_rsa')
+        private
+
+        def open_file filename, mode, default=nil
+            if filename.nil?
+                default
+            else
+                raise ArgumentError, "File #{filename} could not be found" unless File.exists? filename or mode == 'w'
+                File.open filename, mode
             end
         end
     end
+end

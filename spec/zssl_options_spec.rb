@@ -12,6 +12,10 @@ describe Options do
         opts.target.should.nil?
         opts.key.should.nil?
     end
+    it "points to the ssh rsa key by default" do
+        opts = Options.new
+        opts.local_ssh_pub_key.should end_with ".ssh/id_rsa"
+    end
 
     context "parsing the input" do
         local_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
@@ -62,12 +66,21 @@ describe Options do
         end
         it "points to the provided key" do
             private_rsa = File.join(File.dirname(__FILE__), 'id_rsa_test')
-            options = {:key => private_rsa}
+            keyopts = {:key => private_rsa}
             opts = Options.new
-            opts.stub(:options).and_return(options)
+            opts.stub(:options).and_return(keyopts)
             opts.stub(:arguments).and_return('d')
             opts.parse!
             opts.key.path.should eq private_rsa
+        end
+        it "fails if the provided key does not exists" do
+            private_rsa = File.join(File.dirname(__FILE__), 'not_existing_key')
+            keyopts = {:key => private_rsa}
+            opts = Options.new
+            opts.stub(:options).and_return(keyopts)
+            opts.stub(:arguments).and_return('e')
+            opts.stub(:puts)
+            expect do opts.parse! end.to raise_error SystemExit
         end
         it "will use stdin and stdout if no source nor target is provided" do
             opts = Options.new
