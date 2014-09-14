@@ -14,7 +14,7 @@ describe Options do
     end
     it "points to the ssh rsa key by default" do
         opts = Options.new
-        opts.local_ssh_pub_key.should end_with ".ssh/id_rsa"
+        opts.local_ssh_key.should end_with ".ssh/id_rsa"
     end
 
     context "parsing the input" do
@@ -39,28 +39,28 @@ describe Options do
         it "encryption mode if e passed" do
             opts = Options.new
             opts.stub(:arguments).and_return('e')
-            opts.stub(:local_ssh_pub_key).and_return local_rsa
+            opts.stub(:local_ssh_key).and_return local_rsa
             opts.parse!
             opts.mode.should eq :encrypt
         end
         it "decryption mode if d passed" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')
-            opts.stub(:local_ssh_pub_key).and_return local_rsa
+            opts.stub(:local_ssh_key).and_return local_rsa
             opts.parse!
             opts.mode.should eq :decrypt
         end
         it "points to ssh key if no key is provided" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')
-            opts.stub(:local_ssh_pub_key).and_return local_rsa
+            opts.stub(:local_ssh_key).and_return local_rsa
             opts.parse!
             opts.key.path.should eq local_rsa
         end
         it "fails if no key provided nor ssh key is available" do
             opts = Options.new
             opts.stub(:arguments).and_return('e')
-            opts.stub(:local_ssh_pub_key).and_return ''
+            opts.stub(:local_ssh_key).and_return ''
             opts.stub(:puts)
             expect do opts.parse! end.to raise_error SystemExit
         end
@@ -85,7 +85,7 @@ describe Options do
         it "will use stdin and stdout if no source nor target is provided" do
             opts = Options.new
             opts.stub(:arguments).and_return('d')
-            opts.stub(:local_ssh_pub_key).and_return local_rsa
+            opts.stub(:local_ssh_key).and_return local_rsa
             opts.parse!
             opts.source.should eq $stdin
             opts.target.should eq $stdout
@@ -95,7 +95,7 @@ describe Options do
             target = Tempfile.new('target')
             opts = Options.new
             opts.stub(:arguments).and_return('d')
-            opts.stub(:local_ssh_pub_key).and_return local_rsa
+            opts.stub(:local_ssh_key).and_return local_rsa
             opts.parse!
             begin
                 opts.source.should eq source

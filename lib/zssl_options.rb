@@ -44,43 +44,48 @@ module Zoocial
         def parse!
             begin
                 parse
-                @mode, @source, @target = arguments
-                raise ArgumentError, "Mode is mandatory" if @mode.nil? or @mode.empty?
-                if ['e', 'encrypt'].include? @mode.downcase
-                    @mode = :encrypt
-                elsif ['d', 'decrypt'].include? @mode.downcase
-                    @mode = :decrypt
-                else
-                    raise ArgumentError, "Invalid mode '#{@mode}'"
-                end
-
-                if options[:key].nil?
-                    options[:key] = local_ssh_pub_key 
-                end
-                    
-                raise ArgumentError, "Could not find valid RSA key" unless options.has_key? :key
-
-                @source = open_file @source, 'r', $stdin
-                @target = open_file @target, 'w', $stdout
-                @key = open_file options[:key], 'r'
+                mode, source, target = arguments
+                @mode = parse_mode(mode)
+                @source = open_file(source, 'r') || $stdin
+                @target = open_file(target, 'w') || $stdout
+                @key = open_file get_ssh_key, 'r' || raise
             rescue => e
                 raise e unless print_error e
             end
         end
 
-        def local_ssh_pub_key
+        def local_ssh_key
             File.expand_path('~/.ssh/id_rsa')
         end
 
         private
 
-        def open_file filename, mode, default=nil
-            if filename.nil?
-                default
-            else
-                raise ArgumentError, "File #{filename} could not be found" unless File.exists? filename or mode == 'w'
-                File.open filename, mode
+        def open_file filename, mode
+            begin
+              return File.open filename, mode unless filename.nil? or filename.empty?
+              nil
+            rescue Errno::ENOENT
+              raise ArgumentError, "File #{filename} could not be found"
             end
         end
+
+        def parse_mode(mode)
+          case mode
+          when /^e(ncrypt)?$/i
+            mode = :encrypt
+          when /^d(ecrypt)?$/i
+            mode = :decrypt
+          else
+            raise ArgumentError, "Mode is mandatory" if mode.nil? or mode.empty?
+            raise ArgumentError, "Invalid mode '#{mode}'"
+          end
+        end
+
+        def get_ssh_key
+          key = options.fetch :key, local_ssh_key
+          raise ArgumentError, "Could not find valid RSA key" if key.nil? or key.empty?
+          key
+        end
+
     end
 end

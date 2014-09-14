@@ -64,6 +64,10 @@ The usual for git and ruby
     gem build zssl.gemspec
     gem install zssl-0.0.1.gem
 
+## Quick test in a one-liner
+
+`F=~/a_file_to_test ; expected=$(md5 < $F) ; zssl e < $F > ~/testfile ; result=$(zssl d < ~/testfile | md5) ; if [ "$expected"="$result" ]; then echo "All good" ; else echo "Something went went wrong: $expected != $result" ; fi`
+
 ## TODO
 
 I'm still working on it, and would probably provide a homebrew formula for the lazy people like me.
