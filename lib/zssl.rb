@@ -8,8 +8,12 @@ module Zoocial
         attr_reader :pkey, :noise_size
 
         def initialize(key)
-            raise ArgumentError, "Key cannot be nil" if key.nil?
+            @chunk_size = 1024
+            @division_line = '-' * 60
+
             case key
+            when nil
+              raise ArgumentError, "Key cannot be nil"
             when OpenSSL::PKey::PKey
                 @pkey = key
             when String, File, IO
@@ -20,6 +24,7 @@ module Zoocial
                     @pkey = OpenSSL::PKey.read text
                 end
             end
+
             case @pkey
             when OpenSSL::PKey::RSA
                 @noise_size = @pkey.n.num_bytes >> 1 | @pkey.n.num_bytes >> 2
@@ -28,34 +33,26 @@ module Zoocial
             else
                 raise ArgumentError, "Unsupported key #{key}"
             end
-            @chunk_size = 1024
-            @division_line = '-' * 60
         end
 
         def encrypt(source, target)
             source = Zoocial.open_file source, 'r'
             target = Zoocial.open_file target, 'w'
 
-            cipher = OpenSSL::Cipher::AES256.new 'CBC'
-            cipher.encrypt
-            key = cipher.random_key 
-            iv = cipher.random_iv
-            cipher.key = key
-            cipher.iv = iv
-            hidden_key = hide_shared_key_in_buffer key, iv
+            cipher, hidden_key = create_cipher
 
             begin
                 target.write Base64.encode64(@pkey.public_encrypt(hidden_key))
                 target.write @division_line + "\n"
 
-                encrypted = "" 
+                encrypted = ""
                 begin
                     chunk = source.read(@chunk_size)
                     encrypted += cipher.update(chunk)
                     encrypted += cipher.final if source.eof?
                     while encrypted.length >= 45
                         target.write Base64.encode64(encrypted.slice!(0..44))
-                    end 
+                    end
                 end until source.eof?
                 target.write Base64.encode64 encrypted
             rescue Interrupt
@@ -69,24 +66,9 @@ module Zoocial
         def decrypt(source, target)
             source = Zoocial.open_file source, 'r'
             target = Zoocial.open_file target, 'w'
-
-            buffer = ""
             begin
-                begin
-                    line = source.readline.chomp
-                    if line == @division_line
-                        break
-                    end
-                    buffer += line
-                end until source.eof?
-
-                buffer = @pkey.private_decrypt Base64.decode64(buffer)
-                key, iv = read_shared_key_from_buffer buffer
-
-                cipher = OpenSSL::Cipher::AES256.new 'CBC'
-                cipher.decrypt
-                cipher.key = key
-                cipher.iv = iv
+                key, iv = decrypt_header(source)
+                cipher = create_decipher key, iv
                 begin
                     chunk = Base64.decode64(source.readline)
                     target.write cipher.update(chunk)
@@ -102,12 +84,22 @@ module Zoocial
 
         private
 
-        def hide_shared_key_in_buffer key, iv
+        def create_cipher
+            cipher = OpenSSL::Cipher::AES256.new 'CBC'
+            cipher.encrypt
+            key = cipher.random_key
+            iv = cipher.random_iv
+            cipher.key = key
+            cipher.iv = iv
+            [cipher, create_hidden_key(key, iv)]
+        end
+
+        def create_hidden_key key, iv
             seed = [(SecureRandom.random_number * 1_000_000_000_000)].pack("I")
             pos_in_buffer = seed.unpack("I").pop.modulo(@noise_size - 52)
             random_buffer = ""
-            begin 
-                random_buffer += SecureRandom.random_bytes 
+            begin
+                random_buffer += SecureRandom.random_bytes
             end while random_buffer.length <= @noise_size
             first = seed + random_buffer.byteslice(0..pos_in_buffer - 1) + key + iv
             second = random_buffer.byteslice(first.bytesize..@noise_size - 1)
@@ -119,6 +111,28 @@ module Zoocial
             return buffer.byteslice(pos_in_buffer, 32), \
                 buffer.byteslice(pos_in_buffer + 32, 16)
         end
+
+      def decrypt_header(source)
+        buffer = ""
+        begin
+            line = source.readline.chomp
+            if line == @division_line
+                break
+            end
+            buffer += line
+        end until source.eof?
+
+        buffer = @pkey.private_decrypt Base64.decode64(buffer)
+        key, iv = read_shared_key_from_buffer(buffer)
+      end
+
+      def create_decipher(key, iv)
+        cipher = OpenSSL::Cipher::AES256.new 'CBC'
+        cipher.decrypt
+        cipher.key = key
+        cipher.iv = iv
+        cipher
+      end
 
     end
 
@@ -154,7 +168,7 @@ module Zoocial
 
     def self.open_file file, mode
         case file
-        when String 
+        when String
             File.open file, mode
         when File, IO
             file
