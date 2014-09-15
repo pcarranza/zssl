@@ -66,7 +66,7 @@ The usual for git and ruby
 
 ## Quick test in a one-liner
 
-`F=~/a_file_to_test ; expected=$(md5 < $F) ; zssl e < $F > ~/testfile ; result=$(zssl d < ~/testfile | md5) ; if [ "$expected"="$result" ]; then echo "All good" ; else echo "Something went went wrong: $expected != $result" ; fi`
+`F=~/a_file_to_test ; expected=$(md5 < $F) ; zssl e < $F > ~/testfile ; result=$(zssl d < ~/testfile | md5) ; if [ "$expected"="$result" ]; then echo "All good" ; else echo "Something went wrong: $expected != $result" ; fi`
 
 ## TODO
 
