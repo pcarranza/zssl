@@ -7,10 +7,10 @@ opts = Zoocial::Options::new
 opts.parse!
 
 begin
-    crypto = Zoocial::Cipher.new opts.key
-    crypto.send opts.mode, opts.source, opts.target
+  crypto = Zoocial::Cipher.new opts.key
+  crypto.send opts.mode, opts.source, opts.target
 rescue Errno::EPIPE
 rescue
-    puts "An error has occurred #{$!}"
-    exit 1
+  puts "An error has occurred #{$!}"
+  exit 1
 end
