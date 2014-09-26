@@ -136,6 +136,26 @@ module Zoocial
 
   end
 
+  class Key
+
+    def initialize(key)
+      @pkey = case key
+              when nil
+                raise ArgumentError, "Key cannot be nil"
+              when OpenSSL::PKey::PKey
+                key
+              when String, File, IO
+                text = Zoocial.read_file key
+                if text =~ /^ssh-rsa/
+                  Zoocial.load_ssh_pubkey text
+                else
+                  OpenSSL::PKey.read text
+                end
+              end
+    end
+
+  end
+
   private
 
   def self.load_ssh_pubkey text

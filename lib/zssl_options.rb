@@ -6,6 +6,19 @@ module Zoocial
 
     attr_reader :mode, :source, :target, :key
 
+    def initialize(args={})
+      @mode = args.fetch(:mode) { fail ArgumentError, "Mode is mandatory" }
+      @source = args.fetch(:source) { :stdin }
+      @target = args.fetch(:target) { :stdout }
+      @key = args.fetch(:key) { :ssh_id_rsa }
+    end
+
+  end
+
+  class OptionsParser
+
+    attr_reader :mode, :source, :target, :key
+
     def initialize
       @options = {}
       @parser = OptionParser.new do |opts|
