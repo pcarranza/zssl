@@ -114,8 +114,20 @@ module Zoocial
       it "fails without mode" do
         expect { Options.new }.to raise_error ArgumentError, "Mode is mandatory"
       end
+      it "fails with an invalid mode" do
+        expect { Options.new(:mode => "i") }.to raise_error ArgumentError, "Invalid mode"
+      end
+      # it "fails with enc as mode" do
+      #   expect { Options.new(:mode => "enc") }.to raise_error ArgumentError, "Invalid mode"
+      # end
+      it "encrypts with e as mode" do
+        expect(Options.new(:mode => "e").mode).to equal(:encrypt)
+      end
+      it "encrypts with encrypt as mode" do
+        expect(Options.new(:mode => "encrypt").mode).to equal(:encrypt)
+      end
 
-      context 'by default' do
+      context 'encryption, by default' do
         let!(:by_default) { Options.new(:mode => "e") }
         it 'uses stdin as source' do
           expect(by_default.source).to equal(:stdin)

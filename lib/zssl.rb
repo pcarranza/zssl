@@ -3,27 +3,18 @@ require "base64"
 require "securerandom"
 
 module Zoocial
+
   class Cipher
 
     attr_reader :pkey, :noise_size
 
     def initialize(key)
+      fail "Key cannot be nil" if key.nil?
+
       @chunk_size = 1024
       @division_line = '-' * 60
-
-      @pkey = case key
-              when nil
-                raise ArgumentError, "Key cannot be nil"
-              when OpenSSL::PKey::PKey
-                key
-              when String, File, IO
-                text = Zoocial.read_file key
-                if text =~ /^ssh-rsa/
-                  Zoocial.load_ssh_pubkey text
-                else
-                  OpenSSL::PKey.read text
-                end
-              end
+      @pkey = key if key.respond_to? :public_key
+      @pkey ||= SSHKey.new(:file => key ).rsa
 
       case @pkey
       when OpenSSL::PKey::RSA
@@ -136,44 +127,59 @@ module Zoocial
 
   end
 
-  class Key
+  class Options
+    attr_reader :mode, :source, :target, :key
 
-    def initialize(key)
-      @pkey = case key
-              when nil
-                raise ArgumentError, "Key cannot be nil"
-              when OpenSSL::PKey::PKey
-                key
-              when String, File, IO
-                text = Zoocial.read_file key
-                if text =~ /^ssh-rsa/
-                  Zoocial.load_ssh_pubkey text
-                else
-                  OpenSSL::PKey.read text
-                end
+    def initialize(args={})
+      @source = args.fetch(:source) { :stdin }
+      @target = args.fetch(:target) { :stdout }
+      @key = args.fetch(:key) { :ssh_id_rsa }
+      @mode = case args.fetch(:mode) { fail ArgumentError, "Mode is mandatory" }
+              when /^e(ncrypt)?$/i
+                :encrypt
+              when /^d(ecrypt)?$/i
+                :decrypt
+              else
+                raise ArgumentError, "Invalid mode"
               end
     end
 
   end
 
-  private
+  class SSHKey
 
-  def self.load_ssh_pubkey text
-    rsakey = OpenSSL::PKey::RSA.new
-    text.lines.each do |line|
-      base64 = line.chomp.split[1]
-      keydata = base64.unpack("m").first
+    attr_reader :rsa
+
+    def initialize(args={})
+      source_file = args.fetch(:file) { fail ArgumentError, "Filename is required" } 
+      source = if source_file.respond_to?(:read)
+                 source_file.read()
+               else
+                 File.open(source_file) do |file|
+                   file.read()
+                 end
+               end
+      @rsa = if source =~ /^ssh-rsa/ then load_ssh_rsa_key(source) end
+      @rsa ||= OpenSSL::PKey.read(source)
+    end
+
+    private 
+
+    def load_ssh_rsa_key(source)
+      rsakey = OpenSSL::PKey::RSA.new
       parts = Array.new
-      while (keydata.length > 0)
-        dlen = keydata[0, 4].bytes.inject(0) do |a, b|
+
+      base64 = source.chomp.split[1]
+      keydata = base64.unpack("m").first # Actually this is base64, expanded
+      while (keydata.length > 0) # So, while there is data in the expanded b64, no need to make it a while
+        dlen = keydata[0, 4].bytes.inject(0) do |a, b| # Get the length of the key type declaration
           (a << 8) + b
         end
-        data = keydata[4, dlen]
-        keydata = keydata[(dlen + 4)..-1]
-        parts.push(data)
+        data = keydata[4, dlen] # Key type declaration
+        keydata = keydata[(dlen + 4)..-1] # The actual key
+        parts.push(data) # push the data into the parts array
       end
-      type = parts[0]
-      raise ArgumentError, "Unsupported key type #{type}" unless type == "ssh-rsa"
+      raise ArgumentError, "Unsupported key type #{parts[0]}" unless parts[0] == "ssh-rsa"
       e = parts[1].bytes.inject do |a, b|
         (a << 8) + b
       end
@@ -182,9 +188,11 @@ module Zoocial
       end
       rsakey.n = n
       rsakey.e = e
+      @rsa = rsakey
     end
-    rsakey
   end
+
+  private
 
   def self.open_file file, mode
     case file

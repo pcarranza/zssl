@@ -13,14 +13,6 @@ module Zoocial
       end.to raise_error 'Key cannot be nil'
     end
 
-    it "errs if key is not valid" do
-      expect do
-        Cipher.new 123
-      end.to raise_error 'Unsupported key 123'
-    end
-
-    key_size = 1024
-
     context "with a source file" do
       delete = Proc.new do |file|
         case file
@@ -33,7 +25,7 @@ module Zoocial
       end
 
       bigfile = Tempfile.new('bigfile')
-      bigfile.write(SecureRandom.hex) until bigfile.length > key_size * 16
+      bigfile.write(SecureRandom.hex) until bigfile.length > 1024 * 16
       bigfile.close
       source = bigfile.path
       source_md5 = Digest::MD5.digest File.read(source)
@@ -88,7 +80,7 @@ module Zoocial
       end
 
       context "with a generated RSA keypair" do
-        keypair = OpenSSL::PKey::RSA::new key_size
+        keypair = OpenSSL::PKey::RSA::new 1024
 
         it "contains the key" do
           crypto = Cipher.new keypair
@@ -125,16 +117,34 @@ module Zoocial
     end
   end
 
-  describe Key do
+  describe SSHKey do
 
-    it "can be read from an ssh file" do
+    it "fails with error without a file" do
+      expect { SSHKey.new }.to raise_error(ArgumentError, "Filename is required")
     end
 
-    it "should not be DSA" do
-        keypair = OpenSSL::PKey::DSA::new 1024
-        expect {
-          Cipher.new keypair
-        }.to raise_error 'DSA is not supported'
+    let!(:ssh_ir_rsa_pub) { File.join(File.dirname(__FILE__), 'id_rsa_test.pub') }
+    let!(:ssh_id_rsa) { File.join(File.dirname(__FILE__), 'id_rsa_test') }
+    let!(:pub_n) {
+      "231069559501742444218495287675120846094965542347670961881052237776584769" +
+      "273043668624017164461229096583758460385903092375272223124866737230529743" +
+      "391897753729946928575322814441350866472309822306201685879129238700830269" +
+      "120098986951793340195831462812435193501610102440803431706970319260319065" +
+      "687679831285844568307139584323381230402680618161927195912301382030597144" +
+      "202422011982456872146374607823063415991233659611776244257152140297061876" +
+      "552894030061608120400967159375081006395931743477829014327328493979611701" +
+      "183360797502215904549856594817444208311508839570137714704133620260352062" +
+      "18011528297319868703374919652048692793521"
+    }
+    let!(:pub_e) { "65537" }
+
+    it "can load a pub key from a file" do
+      sshkey = SSHKey.new(:file => ssh_ir_rsa_pub)
+      expect(sshkey.rsa.n.to_s).to eq(pub_n)
+      expect(sshkey.rsa.e.to_s).to eq(pub_e)
+    end
+
+    it "can load a priv key from a file" do
     end
 
   end
