@@ -172,27 +172,36 @@ module Zoocial
       rsakey = OpenSSL::PKey::RSA.new
       parts = Array.new
 
-      base64 = source.chomp.split[1]
-      keydata = base64.unpack("m").first # Actually this is base64, expanded
-      while (keydata.length > 0) # So, while there is data in the expanded b64, no need to make it a while
-        dlen = keydata[0, 4].bytes.inject(0) do |a, b| # Get the length of the key type declaration
-          (a << 8) + b
-        end
-        data = keydata[4, dlen] # Key type declaration
-        keydata = keydata[(dlen + 4)..-1] # The actual key
+      keydata = read_key_data(source)
+      3.times do
+        section_len = parse_length(keydata[0, 4])
+        data = keydata[4, section_len] # The data
+        keydata = keydata[(section_len + 4)..-1] # The rest of the data
         parts.push(data) # push the data into the parts array
       end
-      raise ArgumentError, "Unsupported key type #{parts[0]}" unless parts[0] == "ssh-rsa"
-      e = parts[1].bytes.inject do |a, b|
-        (a << 8) + b
-      end
-      n = parts[2].bytes.inject do |a, b|
-        (a << 8) + b
-      end
-      rsakey.n = n
-      rsakey.e = e
+      rsakey.e = parse_data(parts[1])
+      rsakey.n = parse_data(parts[2])
       @rsa = rsakey
     end
+
+    def read_key_data(source)
+      base64 = source.chomp.split[1]
+      keydata = base64.unpack("m").first # Actually this is base64, expanded
+      keydata
+    end
+
+    def parse_length(data)
+      data.bytes.inject(0) do |sum, byte|
+        (sum << 8) + byte
+      end
+    end
+
+    def parse_data(data)
+      data.bytes.inject do |sum, byte|
+        (sum << 8) + byte
+      end
+    end
+
   end
 
   private
