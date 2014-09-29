@@ -159,13 +159,16 @@ module Zoocial
                    file.read()
                  end
                end
-      @rsa = if source =~ /^ssh-rsa/ then load_ssh_rsa_key(source) end
+      @rsa = load_ssh_rsa_key(source)
       @rsa ||= OpenSSL::PKey.read(source)
     end
 
     private 
 
     def load_ssh_rsa_key(source)
+      fail "DSA is not supported" if source =~ /^ssh-dsa/
+      return nil unless source =~ /^ssh-rsa/
+
       rsakey = OpenSSL::PKey::RSA.new
       parts = Array.new
 
