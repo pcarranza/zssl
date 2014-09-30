@@ -140,8 +140,8 @@ module Zoocial
 
     it "can load a pub key from a file" do
       sshkey = SSHKey.new(:file => ssh_ir_rsa_pub)
-      expect(sshkey.rsa.n.to_s).to eq(pub_n)
       expect(sshkey.rsa.e.to_s).to eq(pub_e)
+      expect(sshkey.rsa.n.to_s).to eq(pub_n)
     end
 
     it "can load a priv key from a file" do

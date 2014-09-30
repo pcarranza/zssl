@@ -151,7 +151,7 @@ module Zoocial
     attr_reader :rsa
 
     def initialize(args={})
-      source_file = args.fetch(:file) { fail ArgumentError, "Filename is required" } 
+      source_file = args.fetch(:file) { fail ArgumentError, "Filename is required" }
       source = if source_file.respond_to?(:read)
                  source_file.read()
                else
@@ -163,41 +163,35 @@ module Zoocial
       @rsa ||= OpenSSL::PKey.read(source)
     end
 
-    private 
+    private
 
     def load_ssh_rsa_key(source)
       fail "DSA is not supported" if source =~ /^ssh-dsa/
       return nil unless source =~ /^ssh-rsa/
 
       rsakey = OpenSSL::PKey::RSA.new
-      parts = Array.new
-
       keydata = read_key_data(source)
-      3.times do
-        section_len = parse_length(keydata[0, 4])
-        data = keydata[4, section_len] # The data
-        keydata = keydata[(section_len + 4)..-1] # The rest of the data
-        parts.push(data) # push the data into the parts array
-      end
-      rsakey.e = parse_data(parts[1])
-      rsakey.n = parse_data(parts[2])
+
+      key_type_length = parse_data(keydata.slice!(0, 4))
+      keydata.slice!(0, key_type_length)
+
+      exponent_length = parse_data(keydata.slice!(0, 4))
+      rsakey.e = parse_data(keydata.slice!(0, exponent_length))
+
+      number_length = parse_data(keydata.slice!(0, 4))
+      rsakey.n = parse_data(keydata.slice!(0, number_length))
+
       @rsa = rsakey
     end
 
     def read_key_data(source)
       base64 = source.chomp.split[1]
-      keydata = base64.unpack("m").first # Actually this is base64, expanded
+      keydata = base64.unpack("m").first
       keydata
     end
 
-    def parse_length(data)
-      data.bytes.inject(0) do |sum, byte|
-        (sum << 8) + byte
-      end
-    end
-
     def parse_data(data)
-      data.bytes.inject do |sum, byte|
+      data.bytes.inject(0) do |sum, byte|
         (sum << 8) + byte
       end
     end
