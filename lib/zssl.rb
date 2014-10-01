@@ -178,8 +178,8 @@ module Zoocial
       exponent_length = parse_data(keydata.slice!(0, 4))
       rsakey.e = parse_data(keydata.slice!(0, exponent_length))
 
-      number_length = parse_data(keydata.slice!(0, 4))
-      rsakey.n = parse_data(keydata.slice!(0, number_length))
+      modulus_length = parse_data(keydata.slice!(0, 4))
+      rsakey.n = parse_data(keydata.slice!(0, modulus_length))
 
       @rsa = rsakey
     end
