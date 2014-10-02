@@ -169,12 +169,12 @@ module Zoocial
       fail "DSA is not supported" if source =~ /^ssh-dsa/
       return nil unless source =~ /^ssh-rsa/
 
+      keydata = decode_key(source)
+
+      skip_key_type_length = parse_data(keydata.slice!(0, 4))
+      keydata.slice!(0, skip_key_type_length)
+
       rsakey = OpenSSL::PKey::RSA.new
-      keydata = read_key_data(source)
-
-      key_type_length = parse_data(keydata.slice!(0, 4))
-      keydata.slice!(0, key_type_length)
-
       exponent_length = parse_data(keydata.slice!(0, 4))
       rsakey.e = parse_data(keydata.slice!(0, exponent_length))
 
@@ -184,7 +184,7 @@ module Zoocial
       @rsa = rsakey
     end
 
-    def read_key_data(source)
+    def decode_key(source)
       base64 = source.chomp.split[1]
       keydata = base64.unpack("m").first
       keydata
