@@ -10,7 +10,7 @@ module Zoocial
     it "errs without public key" do
       expect do
         Cipher.new nil
-      end.to raise_error 'Key cannot be nil'
+      end.to raise_error 'Key is required'
     end
 
     context "with a source file" do

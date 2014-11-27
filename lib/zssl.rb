@@ -6,10 +6,10 @@ module Zoocial
 
   class Cipher
 
-    attr_reader :pkey, :noise_size
+    attr_reader :pkey
 
     def initialize(key)
-      fail "Key cannot be nil" if key.nil?
+      fail "Key is required" if key.nil?
 
       @chunk_size = 1024
       @division_line = '-' * 60
@@ -18,7 +18,6 @@ module Zoocial
 
       case @pkey
       when OpenSSL::PKey::RSA
-        @noise_size = @pkey.n.num_bytes >> 1 | @pkey.n.num_bytes >> 2
       when OpenSSL::PKey::DSA
         fail ArgumentError, 'DSA is not supported'
       else
@@ -30,12 +29,13 @@ module Zoocial
       source = Zoocial.open_file source, 'r'
       target = Zoocial.open_file target, 'w'
 
-      cipher, hidden_key = create_cipher
-
       begin
-        target.write Base64.encode64(@pkey.public_encrypt(hidden_key))
-        target.write @division_line + "\n"
-
+        cipher = create_cipher do |key, iv|
+          buffer = [key, iv].join
+          buffer = Base64.encode64(@pkey.public_encrypt(buffer))
+          target.write(buffer)
+          target.write(@division_line + "\n")
+        end
         encrypted = ""
         begin
           chunk = source.read(@chunk_size)
@@ -58,8 +58,7 @@ module Zoocial
       source = Zoocial.open_file source, 'r'
       target = Zoocial.open_file target, 'w'
       begin
-        key, iv = decrypt_header(source)
-        cipher = create_decipher key, iv
+        cipher = create_decipher(source)
         begin
           chunk = Base64.decode64(source.readline)
           target.write cipher.update(chunk)
@@ -80,49 +79,33 @@ module Zoocial
       cipher.encrypt
       key = cipher.random_key
       iv = cipher.random_iv
-      cipher.key = key
-      cipher.iv = iv
-      [cipher, create_hidden_key(key, iv)]
-    end
-
-    def create_hidden_key key, iv
-      seed = [(SecureRandom.random_number * 1_000_000_000_000)].pack("I")
-      pos_in_buffer = seed.unpack("I").pop.modulo(@noise_size - 52)
-      random_buffer = ""
-      begin
-        random_buffer += SecureRandom.random_bytes
-      end while random_buffer.length <= @noise_size
-      first = seed + random_buffer.byteslice(0..pos_in_buffer - 1) + key + iv
-      second = random_buffer.byteslice(first.bytesize..@noise_size - 1)
-      return first + second
-    end
-
-    def read_shared_key_from_buffer buffer
-      pos_in_buffer = buffer.byteslice(0..4).unpack("I").pop.modulo(@noise_size - 52) + 4
-      return buffer.byteslice(pos_in_buffer, 32), \
-        buffer.byteslice(pos_in_buffer + 32, 16)
-    end
-
-    def decrypt_header(source)
-      buffer = ""
-      begin
-        line = source.readline.chomp
-        if line == @division_line
-          break
-        end
-        buffer += line
-      end until source.eof?
-
-      buffer = @pkey.private_decrypt Base64.decode64(buffer)
-      key, iv = read_shared_key_from_buffer(buffer)
-    end
-
-    def create_decipher(key, iv)
-      cipher = OpenSSL::Cipher::AES256.new 'CBC'
-      cipher.decrypt
+      if block_given?
+        yield key, iv
+      end
       cipher.key = key
       cipher.iv = iv
       cipher
+    end
+
+    def create_decipher(source)
+      read_key(source) do |key, iv|
+        cipher = OpenSSL::Cipher::AES256.new 'CBC'
+        cipher.decrypt
+        cipher.key = key
+        cipher.iv = iv
+        cipher
+      end
+    end
+
+    def read_key(source)
+      buffer = ""
+      loop do
+        key_line = source.readline.chomp 
+        break if key_line == @division_line
+        buffer << key_line << "\n"
+      end
+      buffer = @pkey.private_decrypt(Base64.decode64(buffer))
+      yield buffer.byteslice(0..32), buffer.byteslice(32..-1)
     end
 
   end
