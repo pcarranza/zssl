@@ -23,7 +23,7 @@ Did you ever needed to send something encrypted to someone? in a really simple y
 
 Sure, some people would say, use a zip with a password; ok, and how do I send you the password securely? by email? should I call you to give you the password so we don't share it publicly? That solution is obviously not good.
 
-You can try RSA encryption, but you will only be able to encrypt something smaller than the key size, so it is not suitable for large files (by large I mean longer than 4k).
+You can try RSA encryption, but you will only be able to encrypt something smaller than the key size, so it is not suitable for large files (by large I mean larger than 4k).
 
 There's also smime encryption, you can email the file using some certificate, you only need an email client that can handle encrypted files, and a smime valid certificate. But even then you will hit a memory limit, and whatever the limit of your mailing system is.
 Also, that could not be done if you use gmail or any other web based email system. So it's not a good option, at last not for me.
