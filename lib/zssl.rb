@@ -1,6 +1,7 @@
 require "openssl"
 require "base64"
 require "securerandom"
+require "forwardable"
 
 module Zoocial
 
@@ -12,23 +13,22 @@ module Zoocial
       fail "Key is required" if key.nil?
 
       @chunk_size = 1024
-      @division_line = '-' * 60
+      @division_line = "-" * 60
       @pkey = key if key.respond_to? :public_key
       @pkey ||= SSHKey.new(:file => key ).rsa
 
       case @pkey
       when OpenSSL::PKey::RSA
       when OpenSSL::PKey::DSA
-        fail ArgumentError, 'DSA is not supported'
+        fail ArgumentError, "DSA is not supported"
       else
         fail ArgumentError, "Unsupported key #{key}"
       end
     end
 
     def encrypt(source, target)
-      source = FileHandler.open(source, 'r')
-      target = FileHandler.open(target, 'w')
-
+      source = WrapFile.reader(source)
+      target = WrapFile.writer(target)
       begin
         shared_key = SharedKey.new
         target.write(Base64.encode64(@pkey.public_encrypt(shared_key.to_s)))
@@ -40,35 +40,35 @@ module Zoocial
           encrypted += cipher.update(chunk)
           encrypted += cipher.final if source.eof?
           while encrypted.length >= 45
-            target.write Base64.encode64(encrypted.slice!(0..44))
+            target.write(Base64.encode64(encrypted.slice!(0..44)))
           end
         end until source.eof?
-        target.write Base64.encode64 encrypted
+        target.write(Base64.encode64(encrypted))
       rescue Interrupt
         puts "Operation canceled by the user"
       ensure
-        target.close unless target.tty?
-        source.close unless source.tty?
+        target.close
+        source.close
       end
     end
 
     def decrypt(source, target)
-      source = FileHandler.open(source, 'r')
-      target = FileHandler.open(target, 'w')
+      source = WrapFile.reader(source)
+      target = WrapFile.writer(target)
       begin
         decipher = read_key(source) do |key, iv|
           SharedKey.new(key, iv).to_decipher
         end
         begin
           chunk = Base64.decode64(source.readline)
-          target.write decipher.update(chunk)
+          target.write(decipher.update(chunk))
         end until source.eof?
-        target.write decipher.final
+        target.write(decipher.final)
       rescue Interrupt
         puts "Operation canceled by the user"
       ensure
-        target.close unless target.tty?
-        source.close unless source.tty?
+        target.close()
+        source.close()
       end
     end
 
@@ -129,7 +129,7 @@ module Zoocial
     private
 
     def new_cipher
-      cipher = OpenSSL::Cipher::AES256.new 'CBC'
+      cipher = OpenSSL::Cipher::AES256.new "CBC"
       yield cipher if block_given?
       cipher.key = @key if @key
       cipher.iv = @iv if @iv
@@ -189,16 +189,29 @@ module Zoocial
 
   end
 
-  class FileHandler
-    def self.open(file, mode)
-      case file
-      when String
-        File.open file, mode
-      when File, IO
-        file
-      else
-        raise ArgumentError, "Invalid file #{file}"
-      end
+  class WrapFile
+    extend Forwardable
+
+    def_delegators :@file, :read, :write, :readline, :eof?
+
+    def self.reader(file)
+      self.new(file, "r")
+    end
+    def self.writer(file)
+      self.new(file, "w")
+    end
+    def initialize(file, mode)
+      @file = case file
+              when String
+                File.open(file, mode)
+              when File, IO
+                file
+              else
+                raise ArgumentError, "Invalid file #{file}"
+              end
+    end
+    def close
+      @file.close unless @file.tty?
     end
   end
   private
