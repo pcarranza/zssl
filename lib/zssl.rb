@@ -26,16 +26,14 @@ module Zoocial
     end
 
     def encrypt(source, target)
-      source = Zoocial.open_file source, 'r'
-      target = Zoocial.open_file target, 'w'
+      source = FileHandler.open(source, 'r')
+      target = FileHandler.open(target, 'w')
 
       begin
-        cipher = create_cipher do |key, iv|
-          buffer = [key, iv].join
-          buffer = Base64.encode64(@pkey.public_encrypt(buffer))
-          target.write(buffer)
-          target.write(@division_line + "\n")
-        end
+        shared_key = SharedKey.new
+        target.write(Base64.encode64(@pkey.public_encrypt(shared_key.to_s)))
+        target.write(@division_line + "\n")
+        cipher = shared_key.to_cipher
         encrypted = ""
         begin
           chunk = source.read(@chunk_size)
@@ -55,15 +53,17 @@ module Zoocial
     end
 
     def decrypt(source, target)
-      source = Zoocial.open_file source, 'r'
-      target = Zoocial.open_file target, 'w'
+      source = FileHandler.open(source, 'r')
+      target = FileHandler.open(target, 'w')
       begin
-        cipher = create_decipher(source)
+        decipher = read_key(source) do |key, iv|
+          SharedKey.new(key, iv).to_decipher
+        end
         begin
           chunk = Base64.decode64(source.readline)
-          target.write cipher.update(chunk)
+          target.write decipher.update(chunk)
         end until source.eof?
-        target.write cipher.final
+        target.write decipher.final
       rescue Interrupt
         puts "Operation canceled by the user"
       ensure
@@ -73,29 +73,6 @@ module Zoocial
     end
 
     private
-
-    def create_cipher
-      cipher = OpenSSL::Cipher::AES256.new 'CBC'
-      cipher.encrypt
-      key = cipher.random_key
-      iv = cipher.random_iv
-      if block_given?
-        yield key, iv
-      end
-      cipher.key = key
-      cipher.iv = iv
-      cipher
-    end
-
-    def create_decipher(source)
-      read_key(source) do |key, iv|
-        cipher = OpenSSL::Cipher::AES256.new 'CBC'
-        cipher.decrypt
-        cipher.key = key
-        cipher.iv = iv
-        cipher
-      end
-    end
 
     def read_key(source)
       buffer = ""
@@ -127,6 +104,37 @@ module Zoocial
               end
     end
 
+  end
+
+  class SharedKey
+
+    def initialize(key=nil, iv=nil)
+      cipher = new_cipher
+      @key = key ||= cipher.random_key
+      @iv = iv ||= cipher.random_iv
+    end
+
+    def to_s
+      [@key, @iv].join
+    end
+
+    def to_cipher
+      new_cipher do |cipher| cipher.encrypt end
+    end
+
+    def to_decipher
+      new_cipher do |cipher| cipher.decrypt end
+    end
+
+    private
+
+    def new_cipher
+      cipher = OpenSSL::Cipher::AES256.new 'CBC'
+      yield cipher if block_given?
+      cipher.key = @key if @key
+      cipher.iv = @iv if @iv
+      cipher
+    end
   end
 
   class SSHKey
@@ -181,21 +189,18 @@ module Zoocial
 
   end
 
-  private
-
-  def self.open_file file, mode
-    case file
-    when String
-      File.open file, mode
-    when File, IO
-      file
-    else
-      raise ArgumentError, "Invalid file #{file}"
+  class FileHandler
+    def self.open(file, mode)
+      case file
+      when String
+        File.open file, mode
+      when File, IO
+        file
+      else
+        raise ArgumentError, "Invalid file #{file}"
+      end
     end
   end
+  private
 
-  def self.read_file file
-    f = Zoocial.open_file file, 'r'
-    f.read
-  end
 end
