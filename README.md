@@ -27,9 +27,11 @@ Parameters
 --------------------
 
 --debug, -d
+
 --identity, -i
 
-First and second arguments will be replaced by stdin and stdout respectively if not provided.
+
+First and second arguments will be replaced with *stdin* and *stdout* respectively if not provided.
 
 Principles and goals
 --------------------
