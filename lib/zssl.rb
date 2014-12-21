@@ -87,25 +87,6 @@ module Zoocial
 
   end
 
-  class Options
-    attr_reader :mode, :source, :target, :key
-
-    def initialize(args={})
-      @source = args.fetch(:source) { :stdin }
-      @target = args.fetch(:target) { :stdout }
-      @key = args.fetch(:key) { :ssh_id_rsa }
-      @mode = case args.fetch(:mode) { fail ArgumentError, "Mode is mandatory" }
-              when /^e(ncrypt)?$/i
-                :encrypt
-              when /^d(ecrypt)?$/i
-                :decrypt
-              else
-                raise ArgumentError, "Invalid mode"
-              end
-    end
-
-  end
-
   class SharedKey
 
     def initialize(key=nil, iv=nil)
@@ -195,14 +176,22 @@ module Zoocial
     def_delegators :@file, :read, :write, :readline, :eof?
 
     def self.reader(file)
+      raise ArgumentError, "File #{file} could not be found" unless File.file?(file)
       self.new(file, "r")
     end
     def self.writer(file)
       self.new(file, "w")
     end
+    def close
+      @file.close if @should_close
+    end
+
+    private
+
     def initialize(file, mode)
       @file = case file
               when String
+                @should_close = true
                 File.open(file, mode)
               when File, IO
                 file
@@ -210,10 +199,23 @@ module Zoocial
                 raise ArgumentError, "Invalid file #{file}"
               end
     end
-    def close
-      @file.close unless @file.tty?
+  end
+
+  class Options
+    attr_reader :mode, :source, :target, :key
+
+    def initialize(args={})
+      @source = args.fetch(:source) { :stdin }
+      @target = args.fetch(:target) { :stdout }
+      @key = args.fetch(:key) { :ssh_id_rsa }
+      @mode = case args.fetch(:mode) { fail ArgumentError, "Mode is mandatory" }
+              when /^e(ncrypt)?$/i
+                :encrypt
+              when /^d(ecrypt)?$/i
+                :decrypt
+              else
+                raise ArgumentError, "Invalid mode"
+              end
     end
   end
-  private
-
 end
