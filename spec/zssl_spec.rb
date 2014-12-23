@@ -6,42 +6,43 @@ module Zoocial
 
   describe Cipher do
 
+    it "errs when initializing without a key" do
+      expect {
+        Cipher.new nil
+      }.to raise_error "A key is required"
+    end
+    it "errs when initializing with a DSA keypair" do
+      keypair = OpenSSL::PKey::DSA::new 1024
+      expect {
+        Cipher.new keypair
+      }.to raise_error "DSA is not supported"
+    end
+
     context "with a pair of ssh key files" do
       let!(:ssh_id_rsa) { File.join(File.dirname(__FILE__), "id_rsa_test") }
       let!(:ssh_id_rsa_pub) { "#{ssh_id_rsa}.pub" }
 
-      it "errs when initializing without a key" do
-        expect {
-          Cipher.new nil
-        }.to raise_error "A key is required"
+      it "initializes with an ssh public key from a file path" do
+        cipher = Cipher.new ssh_id_rsa_pub
+        cipher.pkey.should_not.nil?
       end
-      it "fails to build with a DSA keypair" do
-        keypair = OpenSSL::PKey::DSA::new 1024
-        expect {
-          Cipher.new keypair
-        }.to raise_error "DSA is not supported"
-      end
-      it "reads an ssh public key from an open file object" do
+      it "initializes with an ssh public key from an open file object" do
         File.open ssh_id_rsa_pub, "r" do |f|
           cipher = Cipher.new f
           cipher.pkey.should_not.nil?
         end
-      end
-      it "reads an ssh public key from a file path" do
-        cipher = Cipher.new ssh_id_rsa_pub
-        cipher.pkey.should_not.nil?
       end
 
       source = TestFiles.create_temporary_random_file
       source_md5 = get_file_md5(source)
       encrypted = TestFiles.create_temporary_empty_file(:name => "encrypted")
 
-      it "encrypts a source file correctly" do
+      it "encrypts a source file correctly using the public key" do
         cipher = Cipher.new ssh_id_rsa_pub
         cipher.encrypt(source, encrypted)
         source_md5.should_not eq get_file_md5(encrypted)
       end
-      it "then decrypts the encrypted file correctly and matches the source" do
+      it "then decrypts the encrypted file correctly using the private key and the file matches the source" do
         decrypted = TestFiles.create_temporary_empty_file(:name => "decrypted")
         decipher = Cipher.new ssh_id_rsa
         decipher.decrypt(encrypted, decrypted)
@@ -53,12 +54,12 @@ module Zoocial
       keypair = OpenSSL::PKey::RSA::new 1024
       fingerprint = get_fingerprint(keypair.public_key)
 
-      it "can create a cipher with the RSA key" do
+      it "initializes with the RSA keypair object" do
         cipher = Cipher.new keypair
         fingerprint.should eq get_fingerprint(cipher.pkey.public_key)
       end
 
-      it "can create a cipher with the RSA key written to a file" do
+      it "initializes with the RSA keypair written to a file" do
         keyfile = File.open(TestFiles.create_temporary_empty_file(:name => "keypair"), "w") do |file|
           file.write(keypair.to_pem)
           file.write(keypair.public_key.to_pem)
@@ -110,13 +111,13 @@ module Zoocial
     }
     let!(:pub_e) { "65537" }
 
-    it "can load a pub key from a file" do
+    it "can load a pub key from a pub file" do
       sshkey = SSHKey.new(:file => ssh_id_rsa_pub)
       expect(sshkey.rsa.e.to_s).to eq(pub_e)
       expect(sshkey.rsa.n.to_s).to eq(pub_n)
     end
 
-    it "can load a priv key from a file" do
+    it "can load a private key from a file" do
       sshkey = SSHKey.new(:file => ssh_id_rsa)
       expect(sshkey.rsa.e.to_s).to eq(pub_e)
       expect(sshkey.rsa.n.to_s).to eq(pub_n)
