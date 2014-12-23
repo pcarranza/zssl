@@ -1,19 +1,19 @@
-Gem::Specification.new do |s|
-  s.name = "zssl"
-  s.version = "0.0.1"
-  s.licenses = ["MIT"]
-  s.homepage = "https://github.com/pcarranza/zssl"
-  s.summary = "Extremely simple encryption and decryption tool based on ssh public and private RSA keys"
-  s.description = <<-eos 
-            By using a RSA public key (your ssh keys), this script will mimic the SSL encryption 
-            algorithm (handshake with a public key, then encryption with a shared key)
-            this way the asymetric limitation of encrypting something bigger than the key
-            size gets overriden
+Gem::Specification.new do |spec|
+  spec.name = "zssl"
+  spec.version = "0.1.0"
+  spec.licenses = ["MIT"]
+  spec.homepage = "https://github.com/pcarranza/zssl"
+  spec.summary = "Enveloped encryption for secure file sharing based on ssh RSA keypairs"
+  spec.description = <<-eos 
+            By using a RSA public key loaded from your ssh key, this tool will create
+            an evenloped encryption: shared key encrypted with RSA and the file with 
+            AES256 CBC. Providing strong encryption for any file size, only sharing
+            ssh public key.
   eos
-  s.author = "Pablo Carranza"
-  s.email = "pcarranza@gmail.com"
-  s.files = ["lib/zssl.rb", 'lib/zssl_options.rb']
-  s.executables << "zssl"
+  spec.author = "Pablo Carranza"
+  spec.email = "pcarranza@gmail.com"
+  spec.files = ["lib/zssl.rb"]
+  spec.executables << "zssl"
+
+  spec.add_runtime_dependency 'main', '~> 6.0'
 end
-
-

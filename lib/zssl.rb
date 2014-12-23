@@ -31,7 +31,8 @@ module Zoocial
       target = WrapFile.writer(target)
       begin
         shared_key = SharedKey.new
-        target.write(Base64.encode64(@pkey.public_encrypt(shared_key.to_s)))
+        buffer = Base64.encode64(@pkey.public_encrypt(shared_key.to_s))
+        target.write(buffer)
         target.write(@division_line + "\n")
         cipher = shared_key.to_cipher
         encrypted = ""
@@ -176,7 +177,6 @@ module Zoocial
     def_delegators :@file, :read, :write, :readline, :eof?
 
     def self.reader(file)
-      raise ArgumentError, "File #{file} could not be found" unless File.file?(file)
       self.new(file, "r")
     end
     def self.writer(file)
@@ -201,21 +201,4 @@ module Zoocial
     end
   end
 
-  class Options
-    attr_reader :mode, :source, :target, :key
-
-    def initialize(args={})
-      @source = args.fetch(:source) { :stdin }
-      @target = args.fetch(:target) { :stdout }
-      @key = args.fetch(:key) { :ssh_id_rsa }
-      @mode = case args.fetch(:mode) { fail ArgumentError, "Mode is mandatory" }
-              when /^e(ncrypt)?$/i
-                :encrypt
-              when /^d(ecrypt)?$/i
-                :decrypt
-              else
-                raise ArgumentError, "Invalid mode"
-              end
-    end
-  end
 end

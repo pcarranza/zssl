@@ -1,44 +1,27 @@
 require 'spec_helper'
 require 'zssl'
-require "tempfile"
 require "digest/md5"
 
 module Zoocial
 
   describe Cipher do
 
-    it "errs without public key" do
+    it "errs when building without a key" do
       expect do
         Cipher.new nil
       end.to raise_error 'Key is required'
     end
 
+    it "fails to build with a DSA keypair" do
+      keypair = OpenSSL::PKey::DSA::new 1024
+      expect do
+        Cipher.new keypair
+      end.to raise_error 'DSA is not supported'
+    end
+
     context "with a source file" do
-      delete = Proc.new do |file|
-        case file
-        when String
-          filename = file
-        when File, IO
-          filename = file.path
-        end
-        File.delete filename if File.exist? filename
-      end
-
-      bigfile = Tempfile.new('bigfile')
-      bigfile.write(SecureRandom.hex) until bigfile.length > 1024 * 16
-      bigfile.close
-      source = bigfile.path
-      source_md5 = Digest::MD5.digest File.read(source)
-
-      context "with a DSA keypair" do
-        keypair = OpenSSL::PKey::DSA::new 1024
-
-        it "fails to build" do
-          expect do
-            Cipher.new keypair
-          end.to raise_error 'DSA is not supported'
-        end
-      end
+      source = TestFiles.create_temporary_random_file
+      source_md5 = Digest::MD5.digest(File.open(source, 'r').read())
 
       context "with an ssh public and private key file" do
         pubkeyfile = File.join(File.dirname(__FILE__), 'id_rsa_test.pub')
@@ -59,23 +42,16 @@ module Zoocial
         it "encrypts and then decrypts a file correctly" do
           encrypter = Cipher.new pubkeyfile
           decrypter = Cipher.new privkeyfile
-          source = bigfile.path
-          encrypted = Dir::Tmpname::make_tmpname 'encrypted_big_file', nil
-          decrypted = Dir::Tmpname::make_tmpname 'decrypted_big_file', nil
+          encrypted = TestFiles.create_temporary_empty_file
+          decrypted = TestFiles.create_temporary_empty_file
 
-          begin
-            encrypter.send :encrypt, source, encrypted
-            encrypted_md5 = Digest::MD5.digest File.read(encrypted)
-            source_md5.should_not eq encrypted_md5
+          encrypter.send :encrypt, source, encrypted
+          encrypted_md5 = Digest::MD5.digest File.read(encrypted)
+          source_md5.should_not eq encrypted_md5
 
-            decrypter.decrypt(encrypted, decrypted)
-            decrypted_md5 = Digest::MD5.digest File.read(decrypted)
-            decrypted_md5.should eq source_md5
-          ensure
-            delete.call encrypted
-            delete.call decrypted
-          end
-
+          decrypter.decrypt(encrypted, decrypted)
+          decrypted_md5 = Digest::MD5.digest File.read(decrypted)
+          decrypted_md5.should eq source_md5
         end
       end
 
@@ -88,29 +64,23 @@ module Zoocial
         end
 
         context "written to a temporary file" do
-          keyfile = Tempfile.new('keypair')
+          keyfile = File.open(TestFiles.create_temporary_empty_file("keypair"), "w")
           keyfile.write(keypair.to_pem)
           keyfile.write(keypair.public_key.to_pem)
           keyfile.close
           crypto = Cipher.new keyfile.path
 
           it "encrypts and then decrypts a file correctly" do
-            source = bigfile.path
-            encrypted = Dir::Tmpname::make_tmpname 'encrypted_big_file', nil
-            decrypted = File.open(Dir::Tmpname::make_tmpname('decrypted_big_file', nil), 'w')
+            encrypted = TestFiles.create_temporary_empty_file
+            decrypted = File.open(TestFiles.create_temporary_empty_file, 'w')
 
-            begin
-              crypto.send :encrypt, source, encrypted
-              encrypted_md5 = Digest::MD5.digest File.read(encrypted)
-              source_md5.should_not eq encrypted_md5
+            crypto.send :encrypt, source, encrypted
+            encrypted_md5 = Digest::MD5.digest File.read(encrypted)
+            source_md5.should_not eq encrypted_md5
 
-              crypto.decrypt(encrypted, decrypted)
-              decrypted_md5 = Digest::MD5.digest File.read(decrypted)
-              decrypted_md5.should eq source_md5
-            ensure
-              delete.call encrypted
-              delete.call decrypted
-            end
+            crypto.decrypt(encrypted, decrypted)
+            decrypted_md5 = Digest::MD5.digest File.read(decrypted)
+            decrypted_md5.should eq source_md5
           end
         end
       end
@@ -123,7 +93,7 @@ module Zoocial
       expect { SSHKey.new }.to raise_error(ArgumentError, "Filename is required")
     end
 
-    let!(:ssh_ir_rsa_pub) { File.join(File.dirname(__FILE__), 'id_rsa_test.pub') }
+    let!(:ssh_id_rsa_pub) { File.join(File.dirname(__FILE__), 'id_rsa_test.pub') }
     let!(:ssh_id_rsa) { File.join(File.dirname(__FILE__), 'id_rsa_test') }
     let!(:pub_n) {
       "231069559501742444218495287675120846094965542347670961881052237776584769" +
@@ -139,12 +109,15 @@ module Zoocial
     let!(:pub_e) { "65537" }
 
     it "can load a pub key from a file" do
-      sshkey = SSHKey.new(:file => ssh_ir_rsa_pub)
+      sshkey = SSHKey.new(:file => ssh_id_rsa_pub)
       expect(sshkey.rsa.e.to_s).to eq(pub_e)
       expect(sshkey.rsa.n.to_s).to eq(pub_n)
     end
 
     it "can load a priv key from a file" do
+      sshkey = SSHKey.new(:file => ssh_id_rsa)
+      expect(sshkey.rsa.e.to_s).to eq(pub_e)
+      expect(sshkey.rsa.n.to_s).to eq(pub_n)
     end
 
   end

@@ -1,16 +1,80 @@
 #!/usr/bin/env ruby
 
 require "zssl"
-require "zssl_options"
+require "main"
 
-opts = Zoocial::Options::new
-opts.parse!
+main {
 
-begin
-  crypto = Zoocial::Cipher.new opts.key
-  crypto.send opts.mode, opts.source, opts.target
-rescue Errno::EPIPE
-rescue
-  puts "An error has occurred #{$!}"
-  exit 1
-end
+  name "zssl"
+  
+  description <<-__
+    Enveloped encryption for secure file sharing based on ssh RSA keypairs
+  __
+
+  def run
+    help!
+  end
+
+  def encrypt
+    using_arguments do |cipher, source, target|
+      cipher.encrypt(source, target)
+    end
+  end
+
+  def decrypt
+    using_arguments do |cipher, source, target|
+      cipher.decrypt(source, target)
+    end
+  end
+
+  mode :e do
+    def run() encrypt end
+  end
+  mode :encrypt do
+    def run() encrypt end
+  end
+
+  mode :d do
+    def run() decrypt end
+  end
+  mode :decrypt do
+    def run() decrypt end
+  end
+
+  option("identity", "i") {
+    description "identity ssh key file"
+    arity 1
+    default File.expand_path("~/.ssh/id_rsa")
+    argument_required
+    cast :pathname
+  }
+  argument("source") {
+    description "source file, stdin if not provided"
+    required false
+    cast :input
+  }
+  argument("target") {
+    description "target file, stdout if not provided"
+    required false
+    cast :output
+  }
+
+  def using_arguments(&block)
+    source = params["source"].value || $stdin
+    target = params["target"].value || $stdout
+    begin
+      block.call(create_cipher_from_arguments, source, target)
+    rescue Errno::EPIPE
+      # Ignore
+    rescue Object
+      puts "An error has occurred #{$!}"
+      exit 1
+    end
+  end
+
+  def create_cipher_from_arguments
+    key = params["identity"].value
+    Zoocial::Cipher.new(key)
+  end
+
+}
