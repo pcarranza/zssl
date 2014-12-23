@@ -6,7 +6,7 @@ require "main"
 main {
 
   name "zssl"
-  
+
   description <<-__
     Enveloped encryption for secure file sharing based on ssh RSA keypairs
   __

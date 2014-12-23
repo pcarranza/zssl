@@ -7,6 +7,15 @@ SimpleCov.start do
   add_filter "spec"
 end
 
+def get_fingerprint(key)
+  Digest::MD5.hexdigest(key.to_der)
+end
+def get_file_md5(filepath)
+  File.open(filepath, 'r') do |file|
+    Digest::MD5.hexdigest(file.read)
+  end
+end
+
 module TestFiles
   def self.create_temporary_random_file
     file = Tempfile.new("random_file")
@@ -37,7 +46,7 @@ module TestFiles
     end
   end
 
-  private 
+  private
   def self.ensure_deletion(file)
     ObjectSpace.define_finalizer(self, proc { file.delete if File.exist?(file.path) })
   end

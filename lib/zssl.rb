@@ -10,7 +10,7 @@ module Zoocial
     attr_reader :pkey
 
     def initialize(key)
-      fail "Key is required" if key.nil?
+      fail "A key is required" if key.nil?
 
       @chunk_size = 1024
       @division_line = "-" * 60
@@ -18,21 +18,18 @@ module Zoocial
       @pkey ||= SSHKey.new(:file => key ).rsa
 
       case @pkey
-      when OpenSSL::PKey::RSA
-      when OpenSSL::PKey::DSA
-        fail ArgumentError, "DSA is not supported"
-      else
-        fail ArgumentError, "Unsupported key #{key}"
+      when OpenSSL::PKey::RSA then
+      when OpenSSL::PKey::DSA then fail ArgumentError, "DSA is not supported"
+      else fail ArgumentError, "Unsupported key #{key}"
       end
     end
 
     def encrypt(source, target)
       source = WrapFile.reader(source)
       target = WrapFile.writer(target)
+      shared_key = SharedKey.new
       begin
-        shared_key = SharedKey.new
-        buffer = Base64.encode64(@pkey.public_encrypt(shared_key.to_s))
-        target.write(buffer)
+        target.write_b64(@pkey.public_encrypt(shared_key.to_s))
         target.write(@division_line + "\n")
         cipher = shared_key.to_cipher
         encrypted = ""
@@ -41,12 +38,12 @@ module Zoocial
           encrypted += cipher.update(chunk)
           encrypted += cipher.final if source.eof?
           while encrypted.length >= 45
-            target.write(Base64.encode64(encrypted.slice!(0..44)))
+            target.write_b64(encrypted.slice!(0..44))
           end
         end until source.eof?
-        target.write(Base64.encode64(encrypted))
+        target.write_b64(encrypted)
       rescue Interrupt
-        puts "Operation canceled by the user"
+        $stderr.puts "Operation canceled by the user"
       ensure
         target.close
         source.close
@@ -61,15 +58,15 @@ module Zoocial
           SharedKey.new(key, iv).to_decipher
         end
         begin
-          chunk = Base64.decode64(source.readline)
+          chunk = source.read_b64_line
           target.write(decipher.update(chunk))
         end until source.eof?
         target.write(decipher.final)
       rescue Interrupt
-        puts "Operation canceled by the user"
+        $stderr.puts "Operation canceled by the user"
       ensure
-        target.close()
-        source.close()
+        target.close
+        source.close
       end
     end
 
@@ -78,7 +75,7 @@ module Zoocial
     def read_key(source)
       buffer = ""
       loop do
-        key_line = source.readline.chomp 
+        key_line = source.readline.chomp
         break if key_line == @division_line
         buffer << key_line << "\n"
       end
@@ -124,7 +121,7 @@ module Zoocial
     attr_reader :rsa
 
     def initialize(args={})
-      source_file = args.fetch(:file) { fail ArgumentError, "Filename is required" }
+      source_file = args.fetch(:file) { fail ArgumentError, "File is required" }
       source = if source_file.respond_to?(:read)
                  source_file.read()
                else
@@ -144,15 +141,15 @@ module Zoocial
 
       keydata = decode_key(source)
 
-      skip_key_type_length = parse_data(keydata.slice!(0, 4))
+      skip_key_type_length = bytes_to_number(keydata.slice!(0, 4))
       keydata.slice!(0, skip_key_type_length)
 
       rsakey = OpenSSL::PKey::RSA.new
-      exponent_length = parse_data(keydata.slice!(0, 4))
-      rsakey.e = parse_data(keydata.slice!(0, exponent_length))
+      exponent_length = bytes_to_number(keydata.slice!(0, 4))
+      rsakey.e = bytes_to_number(keydata.slice!(0, exponent_length))
 
-      modulus_length = parse_data(keydata.slice!(0, 4))
-      rsakey.n = parse_data(keydata.slice!(0, modulus_length))
+      modulus_length = bytes_to_number(keydata.slice!(0, 4))
+      rsakey.n = bytes_to_number(keydata.slice!(0, modulus_length))
 
       @rsa = rsakey
     end
@@ -163,7 +160,7 @@ module Zoocial
       keydata
     end
 
-    def parse_data(data)
+    def bytes_to_number(data)
       data.bytes.inject(0) do |sum, byte|
         (sum << 8) + byte
       end
@@ -185,6 +182,12 @@ module Zoocial
     def close
       @file.close if @should_close
     end
+    def write_b64(buffer)
+      write Base64.encode64(buffer)
+    end
+    def read_b64_line
+      Base64.decode64(readline)
+    end
 
     private
 
@@ -193,10 +196,8 @@ module Zoocial
               when String
                 @should_close = true
                 File.open(file, mode)
-              when File, IO
-                file
-              else
-                raise ArgumentError, "Invalid file #{file}"
+              when File, IO then file
+              else raise ArgumentError, "Invalid file #{file}"
               end
     end
   end
