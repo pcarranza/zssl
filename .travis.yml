@@ -6,4 +6,4 @@ rvm:
 before_script: 
   - bundle install
 script: 
-  - bundle exec rspec -f d -c spec/*.rb
+  - bundle exec rspec -f d -c spec
