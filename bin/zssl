@@ -33,7 +33,6 @@ main {
   mode :encrypt do
     def run() encrypt end
   end
-
   mode :d do
     def run() decrypt end
   end
@@ -43,9 +42,9 @@ main {
 
   option("identity", "i") {
     description "identity ssh key file"
+    argument_required
     arity 1
     default File.expand_path("~/.ssh/id_rsa")
-    argument_required
     cast :pathname
   }
   argument("source") {
@@ -60,21 +59,16 @@ main {
   }
 
   def using_arguments(&block)
+    key = params["identity"].value
     source = params["source"].value || $stdin
     target = params["target"].value || $stdout
     begin
-      block.call(create_cipher_from_arguments, source, target)
+      block.call(Zoocial::Cipher.new(key), source, target)
     rescue Errno::EPIPE
       # Ignore
     rescue Object
-      puts "An error has occurred #{$!}"
+      puts "An unexpected error has occurred: #{$!}"
       exit 1
     end
   end
-
-  def create_cipher_from_arguments
-    key = params["identity"].value
-    Zoocial::Cipher.new(key)
-  end
-
 }
