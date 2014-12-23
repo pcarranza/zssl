@@ -16,10 +16,13 @@ module TestFiles
     file.path
   end
 
-  def self.create_temporary_empty_file(name="file")
-    file = Tempfile.new(name)
+  def self.create_temporary_empty_file(args={:name=>"file", :delete=>true})
+    file = Tempfile.new(args[:name])
     file.close
     TestFiles.ensure_deletion(file)
+    if args[:delete]
+      File.delete(file)
+    end
     file.path
   end
 

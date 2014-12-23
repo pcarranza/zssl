@@ -13,8 +13,7 @@ describe "zssl executable acceptance testing" do
 
   context "With a source file" do
     source = TestFiles.create_temporary_random_file
-    encrypted = TestFiles.create_temporary_empty_file("encrypted")
-    File.delete(encrypted)
+    encrypted = TestFiles.create_temporary_empty_file(:name => "encrypted")
 
     it "Encrypts a source file with the public key" do
       TestRunner.new(args=["encrypt", "-i#{TestRunner.public_key}", source, encrypted]).run
@@ -24,8 +23,7 @@ describe "zssl executable acceptance testing" do
     end
 
     it "Then decrypts the encrypted file with the private key and is equal to the source" do
-      decrypted = TestFiles.create_temporary_empty_file("decrypted")
-      File.delete(decrypted)
+      decrypted = TestFiles.create_temporary_empty_file(:name => "decrypted")
 
       TestRunner.new(args=["decrypt", "-i#{TestRunner.private_key}", encrypted, decrypted]).run
 
@@ -37,8 +35,7 @@ describe "zssl executable acceptance testing" do
 
   context "With another source file" do
     source = TestFiles.create_temporary_random_file
-    encrypted = TestFiles.create_temporary_empty_file("encrypted")
-    File.delete(encrypted)
+    encrypted = TestFiles.create_temporary_empty_file(:name => "encrypted")
 
     it "Encrypts a source file with the public key sending the file through stdin" do
       TestRunner.new(args=["e", "-i#{TestRunner.public_key}", '<', source]).run do |out, err|
@@ -51,8 +48,8 @@ describe "zssl executable acceptance testing" do
     end
 
     it "Then decrypts the encrypted file with the private key sending the file through stdin" do
-      decrypted = TestFiles.create_temporary_empty_file("decrypted")
-      File.delete(decrypted)
+      decrypted = TestFiles.create_temporary_empty_file(:name => "decrypted")
+
       TestRunner.new(args=["d", "-i#{TestRunner.private_key}", '<', encrypted, '>', decrypted]).run
       fail "Decrypted file does not exists" unless File.exist?(decrypted)
       fail "Decrypted file is empty" if File.size(decrypted) == 0
