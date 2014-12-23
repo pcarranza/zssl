@@ -26,12 +26,9 @@ gem install zssl
 Parameters
 --------------------
 
---debug, -d
-
 --identity, -i
 
-
-First and second arguments will be replaced with *stdin* and *stdout* respectively if not provided.
+The first and second arguments will be replaced with *stdin* and *stdout* respectively if not provided.
 
 Principles and goals
 --------------------
